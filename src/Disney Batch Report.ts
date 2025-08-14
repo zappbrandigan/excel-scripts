@@ -104,16 +104,16 @@ function main(workbook: ExcelScript.Workbook) {
   newBetweenVYHeaderRange.setValues([headersBetweenVW]);
   styleHeader(newBetweenVYHeaderRange);
 
-  // Trim whitespace in column B (song codes)
+  // Trim whitespace in column C
   const used = sheet.getUsedRange();
   const lastRow = used.getRowCount();
-  const songCodeColB = sheet.getRangeByIndexes(0, 1, lastRow, 1);
-  const trimmedB = songCodeColB
+  const songTitleColC = sheet.getRangeByIndexes(0, 2, lastRow, 1);
+  const trimmedB = songTitleColC
     .getValues()
     .map((row) =>
       row.map((cell) => (typeof cell === 'string' ? cell.trim() : cell))
     );
-  songCodeColB.setValues(trimmedB);
+  songTitleColC.setValues(trimmedB);
 
   // Build lookup sets (case-insensitive)
   const getLookupSet = (wsName: string, colLetter: string): Set<string> => {
@@ -211,7 +211,7 @@ function main(workbook: ExcelScript.Workbook) {
 
     gRange.setValues(updatedG);
 
-    // === IPI (W) and PRO (X) lookups from "IP Table" keyed by song code (B) ===
+    // IPI (W) and PRO (X) lookups from "IP Table" keyed by IP (T)
     // Columns: W=22 (IPI), X=23 (PRO)
     const ipRows = getIpMap(ipTableSheetName, ipKeyCol, ipIpiCol, ipProCol);
 
@@ -222,8 +222,12 @@ function main(workbook: ExcelScript.Workbook) {
       '',
     ]); // PRO
 
+    const colT_data = sheet
+      .getRangeByIndexes(1, 19, dataRowCount, 1)
+      .getValues();
+
     for (let i = 0; i < dataRowCount; i++) {
-      const raw = colB_data[i][0];
+      const raw = colT_data[i][0];
       const searchKey = raw == null ? '' : String(raw).trim().toLowerCase();
 
       if (searchKey) {

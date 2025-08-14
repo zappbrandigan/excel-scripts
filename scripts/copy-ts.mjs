@@ -14,18 +14,28 @@ function toOsts(filePath) {
   return filePath.replace(/\.ts$/i, '.osts');
 }
 
+// Remove any triple-slash reference to office-scripts-docs.d.ts (any path)
+const removeOfficeScriptsRef = (text) =>
+  text.replace(
+    /^\s*\/\/\/\s*<reference\s+path=["'][^"']*office-scripts-docs\.d\.ts["']\s*\/>\s*\r?\n?/gim,
+    ''
+  );
+
 async function main() {
   try {
-    // flat match: only files directly under src/
-    const files = await glob(path.join(srcDir, '*.ts'));
+    const files = await glob(path.join(srcDir, '*.ts')); // flat match
     await fs.ensureDir(outDir);
 
     for (const file of files) {
       const fileName = path.basename(toOsts(file));
       const destPath = path.join(outDir, fileName);
-      await fs.copy(file, destPath);
+
+      const srcText = await fs.readFile(file, 'utf8');
+      const cleaned = removeOfficeScriptsRef(srcText);
+
+      await fs.outputFile(destPath, cleaned, 'utf8');
       console.log(
-        `Copied: ${path.relative(__dirname, file)} → ${path.relative(
+        `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
           __dirname,
           destPath
         )}`

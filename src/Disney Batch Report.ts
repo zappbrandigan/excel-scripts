@@ -304,6 +304,7 @@ function main(workbook: ExcelScript.Workbook) {
     const table = workbook.addTable(usedRange, true);
     table.setName(tableName);
     table.setPredefinedTableStyle('TableStyleMedium2'); // Built-in style name
+    table.getRange().getFormat().autofitColumns();
   };
 
   // Format the lookup sheets as tables

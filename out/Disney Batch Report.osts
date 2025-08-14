@@ -13,7 +13,7 @@ function main(workbook: ExcelScript.Workbook) {
   const ipTableSheetName = 'IP Table';
   const lookupIsrcColumn = 'B';
   const lookupAkaColumn = 'A';
-  const ipKeyCol = 'B'; // song code
+  const ipKeyCol = 'T'; // IP lookup
   const ipIpiCol = 'D'; // IPI to return
   const ipProCol = 'E'; // PRO to return
 
@@ -60,37 +60,27 @@ function main(workbook: ExcelScript.Workbook) {
     keyCol: string,
     ipiCol: string,
     proCol: string
-  ): Map<string, { ipi: string; pro: string }> => {
+  ): { key: string; ipi: string; pro: string }[] => {
     const ws = workbook.getWorksheet(wsName);
     if (!ws) throw new Error(`Lookup sheet "${wsName}" not found.`);
     const lr = ws.getUsedRange().getRowCount();
-    if (lr <= 1) return new Map();
+    if (lr <= 1) return [];
 
-    const keyVals = ws.getRange(`${keyCol}1:${keyCol}${lr}`).getValues(); // [[B1],[B2],...]
+    const keyVals = ws.getRange(`${keyCol}1:${keyCol}${lr}`).getValues();
     const ipiVals = ws.getRange(`${ipiCol}1:${ipiCol}${lr}`).getValues();
     const proVals = ws.getRange(`${proCol}1:${proCol}${lr}`).getValues();
 
-    const map = new Map<string, { ipi: string; pro: string }>();
+    const rows: { key: string; ipi: string; pro: string }[] = [];
     for (let i = 0; i < lr; i++) {
       const rawKey = keyVals[i][0];
-      const key =
-        rawKey === null || rawKey === undefined
-          ? ''
-          : (typeof rawKey === 'string' ? rawKey : String(rawKey))
-              .trim()
-              .toLowerCase();
-      if (!key) continue;
+      const key = rawKey == null ? '' : String(rawKey).trim().toLowerCase();
 
-      const ipiRaw = ipiVals[i][0];
-      const proRaw = proVals[i][0];
+      const ipi = ipiVals[i][0] == null ? '' : String(ipiVals[i][0]).trim();
+      const pro = proVals[i][0] == null ? '' : String(proVals[i][0]).trim();
 
-      const ipi = ipiRaw == null ? '' : String(ipiRaw).trim();
-      const pro = proRaw == null ? '' : String(proRaw).trim();
-
-      // If duplicates exist, later rows will overwrite earlier ones.
-      map.set(key, { ipi, pro });
+      if (key) rows.push({ key, ipi, pro });
     }
-    return map;
+    return rows;
   };
 
   // Delete column G
@@ -223,7 +213,7 @@ function main(workbook: ExcelScript.Workbook) {
 
     // === IPI (W) and PRO (X) lookups from "IP Table" keyed by song code (B) ===
     // Columns: W=22 (IPI), X=23 (PRO)
-    const ipMap = getIpMap(ipTableSheetName, ipKeyCol, ipIpiCol, ipProCol);
+    const ipRows = getIpMap(ipTableSheetName, ipKeyCol, ipIpiCol, ipProCol);
 
     const updatedW: string[][] = Array.from({ length: dataRowCount }, () => [
       '',
@@ -234,24 +224,20 @@ function main(workbook: ExcelScript.Workbook) {
 
     for (let i = 0; i < dataRowCount; i++) {
       const raw = colB_data[i][0];
-      const key =
-        raw === null || raw === undefined
-          ? ''
-          : (typeof raw === 'string' ? raw : String(raw)).trim().toLowerCase();
+      const searchKey = raw == null ? '' : String(raw).trim().toLowerCase();
 
-      if (key && ipMap.has(key)) {
-        const { ipi, pro } = ipMap.get(key)!;
-        updatedW[i][0] = ipi || '';
-        updatedX[i][0] = pro || '';
-      } else {
-        updatedW[i][0] = '';
-        updatedX[i][0] = '';
+      if (searchKey) {
+        // find first IP Table row whose key contains the search key
+        const found = ipRows.find((row) => row.key.includes(searchKey));
+        if (found) {
+          updatedW[i][0] = found.ipi;
+          updatedX[i][0] = found.pro;
+        }
       }
     }
 
-    // Write IPI and PRO
-    sheet.getRangeByIndexes(1, 22, dataRowCount, 1).setValues(updatedW); // W2:...
-    sheet.getRangeByIndexes(1, 23, dataRowCount, 1).setValues(updatedX); // X2:...
+    sheet.getRangeByIndexes(1, 22, dataRowCount, 1).setValues(updatedW); // W
+    sheet.getRangeByIndexes(1, 23, dataRowCount, 1).setValues(updatedX); // X
 
     // Color fill non-empty cells
     applyNonEmptyFill(22, dataRowCount, headerFillColor); // W (IPI)

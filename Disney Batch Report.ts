@@ -1,3 +1,5 @@
+/// <reference path="./office-scripts-docs.d.ts" />
+
 function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 
@@ -16,7 +18,10 @@ function main(workbook: ExcelScript.Workbook) {
     const font = fmt.getFont();
     font.setBold(true);
     font.setUnderline(ExcelScript.RangeUnderlineStyle.single);
+
+    fmt.setWrapText(true);
     range.getEntireColumn().getFormat().autofitColumns();
+    range.getEntireRow().getFormat().autofitRows();
   };
 
   // 1) Delete column G
@@ -66,7 +71,7 @@ function main(workbook: ExcelScript.Workbook) {
   const akaSet = getLookupSet(lookupAkaSheetName, lookupAkaColumn);
 
   // Read B (song codes) for data rows only (skip header)
-  const dataRowCount = Math.max(0, lastRow - 1);
+  let dataRowCount = Math.max(0, lastRow - 1);
   if (dataRowCount === 0) return;
 
   const colB_data = sheet.getRangeByIndexes(1, 1, dataRowCount, 1).getValues();
@@ -90,4 +95,57 @@ function main(workbook: ExcelScript.Workbook) {
 
   sheet.getRangeByIndexes(1, 4, dataRowCount, 1).setValues(updatedE); // E2:...
   sheet.getRangeByIndexes(1, 5, dataRowCount, 1).setValues(updatedF); // F2:...
+
+  // === 6) Compute Setup Note (G) from AD/AE ===
+  dataRowCount = Math.max(0, sheet.getUsedRange().getRowCount() - 1);
+  if (dataRowCount > 0) {
+    const adRange = sheet.getRangeByIndexes(1, 29, dataRowCount, 1); // AD2:AD...
+    const aeRange = sheet.getRangeByIndexes(1, 30, dataRowCount, 1); // AE2:AE...
+    const gRange = sheet.getRangeByIndexes(1, 6, dataRowCount, 1); // G2:G...
+
+    const adVals = adRange.getValues(); // [[val], ...]
+    const aeVals = aeRange.getValues();
+
+    const updatedG: string[][] = Array.from({ length: dataRowCount }, () => [
+      '',
+    ]);
+
+    for (let i = 0; i < dataRowCount; i++) {
+      const adRaw = adVals[i][0];
+      const aeRaw = aeVals[i][0];
+
+      const adText =
+        adRaw === null || adRaw === undefined
+          ? ''
+          : (typeof adRaw === 'string'
+              ? adRaw.trim()
+              : String(adRaw)
+            ).toLowerCase();
+
+      const aeHasValue = !(
+        aeRaw === null ||
+        aeRaw === undefined ||
+        aeRaw === ''
+      );
+
+      // Regex (case-insensitive) for matches anywhere in the cell
+      const isInternational = /(?:international|intl)/i.test(adText);
+      const isThemePark = /theme\s*park/i.test(adText);
+
+      let note = '';
+
+      if (aeHasValue) {
+        if (isInternational) note = 'foreign FTV';
+        else if (isThemePark) note = 'Parks & Resort';
+        else note = 'FTV';
+      } else {
+        if (isThemePark) note = 'Parks & Resort';
+        else note = 'Pop Work';
+      }
+
+      updatedG[i][0] = note;
+    }
+
+    gRange.setValues(updatedG);
+  }
 }

@@ -8,6 +8,7 @@
  *          - Generates Setup Notes based on AD/AE columns
  *          - Applies conditional formatting to highlight non-empty cells
  *          - Formats headers with wrap, bold, underline, and fill color
+ *          - Formats additional sheets as tables
  *
  * Assumptions:
  *          - Column layout in main sheet matches the expected pre-insert positions
@@ -280,4 +281,31 @@ function main(workbook: ExcelScript.Workbook) {
     const allHeaders = sheet.getRangeByIndexes(0, 0, 1, usedCols);
     wrapAndFormat(allHeaders);
   }
+
+  // Helper to format a sheet's used range as a table
+  const formatSheetAsTable = (sheetName: string, tableName: string) => {
+    const ws = workbook.getWorksheet(sheetName);
+    if (!ws) throw new Error(`Sheet "${sheetName}" not found.`);
+
+    const usedRange = ws.getUsedRange();
+    if (!usedRange) return;
+
+    // Remove existing table with same name
+    const existingTables = workbook.getTables();
+    for (let tbl of existingTables) {
+      if (tbl.getName() === tableName) {
+        tbl.delete();
+        break;
+      }
+    }
+
+    const table = workbook.addTable(usedRange, true);
+    table.setName(tableName);
+    table.setPredefinedTableStyle('TableStyleMedium2'); // Built-in style name
+  };
+
+  // Format the lookup sheets as tables
+  formatSheetAsTable('AKA Table', 'AKATable');
+  formatSheetAsTable('ISRCs for upload', 'ISRCLookup');
+  formatSheetAsTable('IP Table', 'IPTable');
 }

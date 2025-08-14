@@ -1,3 +1,5 @@
+/// <reference path="../office-scripts-docs.d.ts" />
+
 function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 
@@ -8,8 +10,12 @@ function main(workbook: ExcelScript.Workbook) {
 
   const lookupIsrcSheetName = 'ISRCs for upload';
   const lookupAkaSheetName = 'AKA Table';
+  const ipTableSheetName = 'IP Table';
   const lookupIsrcColumn = 'B';
   const lookupAkaColumn = 'A';
+  const ipKeyCol = 'B'; // song code
+  const ipIpiCol = 'D'; // IPI to return
+  const ipProCol = 'E'; // PRO to return
 
   const styleHeader = (range: ExcelScript.Range) => {
     const fmt = range.getFormat();
@@ -46,6 +52,45 @@ function main(workbook: ExcelScript.Workbook) {
       custom.getRule().setFormula(`=LEN($${colLetter}2)>0`);
       custom.getFormat().getFill().setColor(color);
     }
+  };
+
+  // Build a map from song code -> { ipi, pro } using the IP Table
+  const getIpMap = (
+    wsName: string,
+    keyCol: string,
+    ipiCol: string,
+    proCol: string
+  ): Map<string, { ipi: string; pro: string }> => {
+    const ws = workbook.getWorksheet(wsName);
+    if (!ws) throw new Error(`Lookup sheet "${wsName}" not found.`);
+    const lr = ws.getUsedRange().getRowCount();
+    if (lr <= 1) return new Map();
+
+    const keyVals = ws.getRange(`${keyCol}1:${keyCol}${lr}`).getValues(); // [[B1],[B2],...]
+    const ipiVals = ws.getRange(`${ipiCol}1:${ipiCol}${lr}`).getValues();
+    const proVals = ws.getRange(`${proCol}1:${proCol}${lr}`).getValues();
+
+    const map = new Map<string, { ipi: string; pro: string }>();
+    for (let i = 0; i < lr; i++) {
+      const rawKey = keyVals[i][0];
+      const key =
+        rawKey === null || rawKey === undefined
+          ? ''
+          : (typeof rawKey === 'string' ? rawKey : String(rawKey))
+              .trim()
+              .toLowerCase();
+      if (!key) continue;
+
+      const ipiRaw = ipiVals[i][0];
+      const proRaw = proVals[i][0];
+
+      const ipi = ipiRaw == null ? '' : String(ipiRaw).trim();
+      const pro = proRaw == null ? '' : String(proRaw).trim();
+
+      // If duplicates exist, later rows will overwrite earlier ones.
+      map.set(key, { ipi, pro });
+    }
+    return map;
   };
 
   // Delete column G
@@ -176,7 +221,41 @@ function main(workbook: ExcelScript.Workbook) {
 
     gRange.setValues(updatedG);
 
-    // Fill non-empty cells
+    // === IPI (W) and PRO (X) lookups from "IP Table" keyed by song code (B) ===
+    // Columns: W=22 (IPI), X=23 (PRO)
+    const ipMap = getIpMap(ipTableSheetName, ipKeyCol, ipIpiCol, ipProCol);
+
+    const updatedW: string[][] = Array.from({ length: dataRowCount }, () => [
+      '',
+    ]); // IPI
+    const updatedX: string[][] = Array.from({ length: dataRowCount }, () => [
+      '',
+    ]); // PRO
+
+    for (let i = 0; i < dataRowCount; i++) {
+      const raw = colB_data[i][0];
+      const key =
+        raw === null || raw === undefined
+          ? ''
+          : (typeof raw === 'string' ? raw : String(raw)).trim().toLowerCase();
+
+      if (key && ipMap.has(key)) {
+        const { ipi, pro } = ipMap.get(key)!;
+        updatedW[i][0] = ipi || '';
+        updatedX[i][0] = pro || '';
+      } else {
+        updatedW[i][0] = '';
+        updatedX[i][0] = '';
+      }
+    }
+
+    // Write IPI and PRO
+    sheet.getRangeByIndexes(1, 22, dataRowCount, 1).setValues(updatedW); // W2:...
+    sheet.getRangeByIndexes(1, 23, dataRowCount, 1).setValues(updatedX); // X2:...
+
+    // Color fill non-empty cells
+    applyNonEmptyFill(22, dataRowCount, headerFillColor); // W (IPI)
+    applyNonEmptyFill(23, dataRowCount, headerFillColor); // X (PRO)
     applyNonEmptyFill(4, dataRowCount, headerFillColor); // AKA (E)
     applyNonEmptyFill(5, dataRowCount, headerFillColor); // ISRC (F)
     applyNonEmptyFill(6, dataRowCount, headerFillColor); // Setup Note (G)

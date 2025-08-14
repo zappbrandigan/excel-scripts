@@ -1,10 +1,11 @@
-/// <reference path="./office-scripts-docs.d.ts" />
+/// <reference path="../office-scripts-docs.d.ts" />
 
 function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 
   const headersBetweenBC = ['PREF Code', 'AKAs', 'ISRCs', 'Setup Note']; // C..F after insert
   const headersBeforeA = ['Assigned To']; // A after insert
+  const headersBetweenVW = ['IPI', 'PRO']; // W..X after insert
   const headerFillColor = '#3bc1ff';
 
   const lookupIsrcSheetName = 'ISRCs for upload';
@@ -24,22 +25,28 @@ function main(workbook: ExcelScript.Workbook) {
     range.getEntireRow().getFormat().autofitRows();
   };
 
-  // 1) Delete column G
+  // Delete column G
   sheet.getRange('G:G').delete(ExcelScript.DeleteShiftDirection.left);
 
-  // 2) Insert four columns between B and C
+  // Insert four columns between B and C
   sheet.getRange('C:F').insert(ExcelScript.InsertShiftDirection.right);
   const newBetweenBCHeaderRange = sheet.getRangeByIndexes(0, 2, 1, 4); // row 1, cols C..F
   newBetweenBCHeaderRange.setValues([headersBetweenBC]);
   styleHeader(newBetweenBCHeaderRange);
 
-  // 3) Insert one column before A
+  // Insert one column before A
   sheet.getRange('A:A').insert(ExcelScript.InsertShiftDirection.right);
   const newBeforeAHeaderRange = sheet.getRange('A1:A1');
   newBeforeAHeaderRange.setValues([headersBeforeA]);
   styleHeader(newBeforeAHeaderRange);
 
-  // 4) Trim whitespace in column B (song codes)
+  // Insert two columns between V and W
+  sheet.getRange('W:X').insert(ExcelScript.InsertShiftDirection.right);
+  const newBetweenVYHeaderRange = sheet.getRangeByIndexes(0, 22, 1, 2);
+  newBetweenVYHeaderRange.setValues([headersBetweenVW]);
+  styleHeader(newBetweenVYHeaderRange);
+
+  // Trim whitespace in column B (song codes)
   const used = sheet.getUsedRange();
   const lastRow = used.getRowCount();
   const songCodeColB = sheet.getRangeByIndexes(0, 1, lastRow, 1);
@@ -50,7 +57,7 @@ function main(workbook: ExcelScript.Workbook) {
     );
   songCodeColB.setValues(trimmedB);
 
-  // 5) Build lookup sets (case-insensitive)
+  // Build lookup sets (case-insensitive)
   const getLookupSet = (wsName: string, colLetter: string): Set<string> => {
     const ws = workbook.getWorksheet(wsName);
     if (!ws) throw new Error(`Lookup sheet "${wsName}" not found.`);

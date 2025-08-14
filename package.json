@@ -1,0 +1,29 @@
+{
+  "name": "excel-scripts",
+  "version": "1.0.0",
+  "description": "Excel automate scripts",
+  "homepage": "https://github.com/zappbrandigan/excel-scripts#readme",
+  "bugs": {
+    "url": "https://github.com/zappbrandigan/excel-scripts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zappbrandigan/excel-scripts.git"
+  },
+  "license": "ISC",
+  "author": "Brandon Johnson",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "copy": "node scripts/copy-ts.mjs"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
+    "@types/node": "^24.2.1",
+    "fs-extra": "^11.3.1",
+    "glob": "^11.0.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

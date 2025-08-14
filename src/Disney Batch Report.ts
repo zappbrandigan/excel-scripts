@@ -26,7 +26,8 @@
  *
  * Environment:
  *          - Office Scripts for Excel and Excel on the Web
- *          - TypeScript syntax, no external dependencies
+ *          - TypeScript syntax
+ *          - Depends on existence and formatting of CWR Converter file exports (AKA Titles, ISRCs, Interested Parties)
  */
 
 function main(workbook: ExcelScript.Workbook) {

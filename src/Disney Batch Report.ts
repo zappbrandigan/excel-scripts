@@ -13,7 +13,7 @@ function main(workbook: ExcelScript.Workbook) {
   const ipTableSheetName = 'IP Table';
   const lookupIsrcColumn = 'B';
   const lookupAkaColumn = 'A';
-  const ipKeyCol = 'T'; // IP lookup
+  const ipKeyCol = 'A'; // IP Table lookup
   const ipIpiCol = 'D'; // IPI to return
   const ipProCol = 'E'; // PRO to return
 
@@ -248,7 +248,6 @@ function main(workbook: ExcelScript.Workbook) {
     applyNonEmptyFill(23, dataRowCount, headerFillColor); // X (PRO)
     applyNonEmptyFill(4, dataRowCount, headerFillColor); // AKA (E)
     applyNonEmptyFill(5, dataRowCount, headerFillColor); // ISRC (F)
-    applyNonEmptyFill(6, dataRowCount, headerFillColor); // Setup Note (G)
 
     // Text-wrap and auto fit headers
     const usedCols = sheet.getUsedRange().getColumnCount();

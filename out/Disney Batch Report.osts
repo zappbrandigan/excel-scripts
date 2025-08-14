@@ -1,5 +1,3 @@
-/// <reference path="../office-scripts-docs.d.ts" />
-
 function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 
@@ -19,10 +17,35 @@ function main(workbook: ExcelScript.Workbook) {
     const font = fmt.getFont();
     font.setBold(true);
     font.setUnderline(ExcelScript.RangeUnderlineStyle.single);
+  };
 
+  const wrapAndFormat = (range: ExcelScript.Range) => {
+    const fmt = range.getFormat();
     fmt.setWrapText(true);
     range.getEntireColumn().getFormat().autofitColumns();
     range.getEntireRow().getFormat().autofitRows();
+  };
+
+  const applyNonEmptyFill = (
+    columnIndex: number,
+    dataRowCount: number,
+    color: string
+  ) => {
+    if (dataRowCount <= 0) return;
+
+    const range = sheet.getRangeByIndexes(1, columnIndex, dataRowCount, 1);
+    const topLeftA1 = range.getCell(0, 0).getAddress().split('!')[1]; // e.g. "E2"
+    const colLetter = topLeftA1.replace(/\d+/g, ''); // "E"
+
+    const cf = range.addConditionalFormat(
+      ExcelScript.ConditionalFormatType.custom
+    );
+    const custom = cf.getCustom();
+
+    if (custom) {
+      custom.getRule().setFormula(`=LEN($${colLetter}2)>0`);
+      custom.getFormat().getFill().setColor(color);
+    }
   };
 
   // Delete column G
@@ -103,8 +126,6 @@ function main(workbook: ExcelScript.Workbook) {
   sheet.getRangeByIndexes(1, 4, dataRowCount, 1).setValues(updatedE); // E2:...
   sheet.getRangeByIndexes(1, 5, dataRowCount, 1).setValues(updatedF); // F2:...
 
-  // === 6) Compute Setup Note (G) from AD/AE ===
-  dataRowCount = Math.max(0, sheet.getUsedRange().getRowCount() - 1);
   if (dataRowCount > 0) {
     const adRange = sheet.getRangeByIndexes(1, 29, dataRowCount, 1); // AD2:AD...
     const aeRange = sheet.getRangeByIndexes(1, 30, dataRowCount, 1); // AE2:AE...
@@ -154,5 +175,15 @@ function main(workbook: ExcelScript.Workbook) {
     }
 
     gRange.setValues(updatedG);
+
+    // Fill non-empty cells
+    applyNonEmptyFill(4, dataRowCount, headerFillColor); // AKA (E)
+    applyNonEmptyFill(5, dataRowCount, headerFillColor); // ISRC (F)
+    applyNonEmptyFill(6, dataRowCount, headerFillColor); // Setup Note (G)
+
+    // Text-wrap and auto fit headers
+    const usedCols = sheet.getUsedRange().getColumnCount();
+    const allHeaders = sheet.getRangeByIndexes(0, 0, 1, usedCols);
+    wrapAndFormat(allHeaders);
   }
 }

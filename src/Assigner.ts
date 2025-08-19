@@ -35,9 +35,17 @@
  * - Adjust the `NAMES` array inside the script to fit your team’s needs.
  */
 
+/**
+ * Distributes names from a predefined list into the chosen column.
+ * Choose "roundRobin" to cycle names row-by-row or "block" for contiguous groups.
+ *
+ * @param workbook The active workbook (provided automatically).
+ * @param columnLetter The target column letter (e.g., "C", "AA").
+ * @param mode Distribution mode: "roundRobin" or "block".
+ */
 function main(
   workbook: ExcelScript.Workbook,
-  columnLetter: string = 'A',
+  columnLetter: string,
   mode: 'roundRobin' | 'block' = 'roundRobin'
 ): number {
   const sheet = workbook.getActiveWorksheet();

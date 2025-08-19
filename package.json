@@ -13,7 +13,6 @@
   "license": "ISC",
   "author": "Brandon Johnson",
   "type": "module",
-  "main": "index.js",
   "scripts": {
     "copy": "node scripts/copy-ts.mjs"
   },

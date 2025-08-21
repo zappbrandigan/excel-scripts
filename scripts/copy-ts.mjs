@@ -21,11 +21,67 @@ const removeOfficeScriptsRef = (text) =>
     ''
   );
 
-// Convert to single-line with \n literals
-const toSingleLine = (text) =>
-  text
-    .replace(/\r?\n/g, '\\n') // real newlines -> literal "\n"
-    .replace(/\t/g, '  '); // optional: normalize tabs
+// Normalize newlines to LF. Do NOT replace with backslash-n; let JSON.stringify
+// escape them to "\n" in the final .osts file.
+const normalizeNewlines = (text) => text.replace(/\r\n/g, '\n');
+
+// Extract the nearest comment block above main() for metadata
+function extractHeaderMetadata(text) {
+  // Find the main function (supports `function main` or `export default function main`)
+  const mainIdx = text.search(/\b(?:export\s+default\s+)?function\s+main\s*\(/);
+  if (mainIdx === -1) return { version: null, description: null };
+
+  const beforeMain = text.slice(0, mainIdx);
+
+  // Get the last block comment `/* ... */` before main, if any
+  const blockComments = [...beforeMain.matchAll(/\/\*[\s\S]*?\*\//g)];
+  const lastBlock = blockComments.length
+    ? blockComments[blockComments.length - 1][0]
+    : null;
+
+  // Or fall back to a run of `//` lines at the end (closest to main)
+  // Capture up to ~30 lines back to avoid grabbing too much.
+  let lastLineRun = null;
+  {
+    const tail = beforeMain.slice(Math.max(0, beforeMain.length - 5000)); // safety window
+    const m = tail.match(/(?:^|\n)(?:\s*\/\/[^\n]*\n?){1,30}\s*$/);
+    lastLineRun = m ? m[0] : null;
+  }
+
+  // Prefer block comment if it is closer; otherwise use line-run
+  let header = '';
+  if (
+    lastBlock &&
+    (!lastLineRun ||
+      beforeMain.lastIndexOf(lastBlock) > beforeMain.lastIndexOf(lastLineRun))
+  ) {
+    header = lastBlock;
+  } else if (lastLineRun) {
+    header = lastLineRun;
+  }
+
+  if (!header) return { version: null, description: null };
+
+  // Strip comment syntax
+  const stripped = header
+    .replace(/^\/\*+|\*+\/$/g, '') // remove /* and */
+    .replace(/^\s*\*\s?/gm, '') // remove leading * on lines
+    .replace(/^\s*\/\/\s?/gm, ''); // remove // prefixes
+
+  // Parse Version
+  // Matches: "Version: 1.2.3", "@version: 1.2.3", "version: 1.2.3"
+  const vMatch = stripped.match(/(?:@?version|Version)\s*[:=]\s*([^\n*]+)/i);
+  const version = vMatch ? vMatch[1].trim() : null;
+
+  // Parse Description: take text after "Description:" (or "@description:")
+  // up until next @tag-like label or end. Supports multi-line descriptions.
+  const dMatch = stripped.match(
+    /(?:@?description|Description)\s*[:=]\s*([\s\S]*?)(?:\n\s*@\w+|\n\s*\w+\s*[:=]|$)/i
+  );
+  const description = dMatch ? dMatch[1].trim() : null;
+
+  return { version, description };
+}
 
 // Minimal, broadly compatible shells for parameterInfo/apiInfo
 const defaultParameterInfo = JSON.stringify({
@@ -53,18 +109,23 @@ async function main() {
       const destPath = path.join(outDir, fileName);
 
       const srcText = await fs.readFile(file, 'utf8');
+
       const cleaned = removeOfficeScriptsRef(srcText);
-      const oneLiner = toSingleLine(cleaned);
+      const { version: parsedVersion, description: parsedDescription } =
+        extractHeaderMetadata(cleaned);
+
+      // Keep real newlines; JSON.stringify will emit "\n" in the .osts.
+      const body = normalizeNewlines(cleaned);
 
       const osts = {
-        version: '0.2.0',
-        body: oneLiner,
-        description: '',
+        version: parsedVersion || '0.2.0',
+        body,
+        description: parsedDescription || '',
         parameterInfo: defaultParameterInfo,
         apiInfo: defaultApiInfo,
       };
 
-      // Pretty-print for readability; Excel is fine with compact or pretty JSON
+      // Compact JSON (Excel is fine with this)
       const json = JSON.stringify(osts);
 
       await fs.outputFile(destPath, json, 'utf8');
@@ -72,7 +133,9 @@ async function main() {
         `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
           __dirname,
           destPath
-        )}`
+        )} (version=${osts.version}${
+          osts.description ? `, description="${osts.description}"` : ''
+        })`
       );
     }
   } catch (err) {

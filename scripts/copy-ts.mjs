@@ -24,8 +24,24 @@ const removeOfficeScriptsRef = (text) =>
 // Convert to single-line with \n literals
 const toSingleLine = (text) =>
   text
-    .replace(/\r?\n/g, '\\n') // replace real newlines with literal "\n"
-    .replace(/\t/g, '  '); // optional: expand tabs to spaces for safety
+    .replace(/\r?\n/g, '\\n') // real newlines -> literal "\n"
+    .replace(/\t/g, '  '); // optional: normalize tabs
+
+// Minimal, broadly compatible shells for parameterInfo/apiInfo
+const defaultParameterInfo = JSON.stringify({
+  originalParameterOrder: [],
+  parameterSchema: {
+    type: 'object',
+    default: {},
+    'x-ms-visibility': 'internal',
+  },
+  returnSchema: { type: 'object', properties: {} },
+});
+
+const defaultApiInfo = JSON.stringify({
+  variant: 'synchronous',
+  variantVersion: 2,
+});
 
 async function main() {
   try {
@@ -40,7 +56,18 @@ async function main() {
       const cleaned = removeOfficeScriptsRef(srcText);
       const oneLiner = toSingleLine(cleaned);
 
-      await fs.outputFile(destPath, oneLiner, 'utf8');
+      const osts = {
+        version: '0.2.0',
+        body: oneLiner,
+        description: '',
+        parameterInfo: defaultParameterInfo,
+        apiInfo: defaultApiInfo,
+      };
+
+      // Pretty-print for readability; Excel is fine with compact or pretty JSON
+      const json = JSON.stringify(osts);
+
+      await fs.outputFile(destPath, json, 'utf8');
       console.log(
         `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
           __dirname,

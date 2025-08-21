@@ -422,7 +422,7 @@ function applyNonEmptyFill(
  *  - valuesOnly?: boolean        Use only cells that contain values for the used range. Default: true.
  *  - clearExisting?: boolean     Delete an existing table with the same name (any sheet) before creating. Default: true.
  *  - hasHeaders?: boolean        Treat first row as headers. Default: true.
- *  - style?: string              Built-in table style name (e.g., "TableStyleMedium2"). Default: "TableStyleLight2".
+ *  - style?: string              Built-in table style name (e.g., "TableStyleMedium2"). Default: "TableStyleLight1".
  *  - autofit?: boolean           Auto-fit columns after creation. Default: true.
  *
  * @returns The created table, or `null` if the sheet has no used range.
@@ -446,7 +446,7 @@ function formatSheetAsTable(
     valuesOnly = true,
     clearExisting = true,
     hasHeaders = true,
-    style = 'TableStyleLight2',
+    style = 'TableStyleLight1',
     autofit = true,
   } = options ?? {};
 
@@ -557,7 +557,7 @@ function buildSetupSheet(
     if (!usedNew) return ws;
     const table = ws.addTable(usedNew.getAddress(), true);
     table.setName('SetupTable');
-    table.setPredefinedTableStyle('TableStyleLight2');
+    table.setPredefinedTableStyle('TableStyleLight1');
     // Dedupe by first column (B) -> index 1 within the table range
     table.getRange().removeDuplicates([1], true);
     table.getSort().apply([{ key: 4, ascending: true }]);

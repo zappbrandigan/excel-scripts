@@ -21,6 +21,12 @@ const removeOfficeScriptsRef = (text) =>
     ''
   );
 
+// Convert to single-line with \n literals
+const toSingleLine = (text) =>
+  text
+    .replace(/\r?\n/g, '\\n') // replace real newlines with literal "\n"
+    .replace(/\t/g, '  '); // optional: expand tabs to spaces for safety
+
 async function main() {
   try {
     const files = await glob(path.join(srcDir, '*.ts')); // flat match
@@ -32,8 +38,9 @@ async function main() {
 
       const srcText = await fs.readFile(file, 'utf8');
       const cleaned = removeOfficeScriptsRef(srcText);
+      const oneLiner = toSingleLine(cleaned);
 
-      await fs.outputFile(destPath, cleaned, 'utf8');
+      await fs.outputFile(destPath, oneLiner, 'utf8');
       console.log(
         `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
           __dirname,

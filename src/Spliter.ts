@@ -2,45 +2,66 @@
 
 function main(
   workbook: ExcelScript.Workbook,
-  maxRowsPerSheet: number = 30000
+  maxRowsPerSheet: number = 30000,
+  sheetName?: string,
+  skipHeader: boolean = true
 ): void {
-  const ws = workbook.getActiveWorksheet();
-
-  const used = ws.getUsedRange();
-  if (!used) {
-    console.log('No used range on the active sheet.');
+  const ws = sheetName
+    ? workbook.getWorksheet(sheetName)
+    : workbook.getActiveWorksheet();
+  if (!ws) {
+    console.log('No worksheet found.');
     return;
   }
 
-  // Values may contain nulls for empty cells; type accordingly
-  const values = used.getValues() as (string | number | boolean | null)[][];
-  if (!values || values.length === 0) {
-    console.log('No values in used range.');
+  // 1) Prefer the used range of column A; fall back to whole-sheet used range
+  const usedA = ws.getRange('A:A').getUsedRange(); // may be null
+  const usedAll = ws.getUsedRange(); // may be null
+  const rowCountA = usedA ? usedA.getRowCount() : 0;
+  const rowCountAll = usedAll ? usedAll.getRowCount() : 0;
+
+  // Heuristic: if column A has something, trust it; otherwise trust whole-sheet
+  const totalRows = Math.max(rowCountA, rowCountAll);
+
+  if (!totalRows || totalRows <= (skipHeader ? 1 : 0)) {
+    console.log('No values detected in column A (or only a header).');
     return;
   }
 
-  // --- First column only, skip the first row (no headers)
-  // Coerce nulls to empty string so setValues() is happy
-  const firstCol: (string | number | boolean)[][] = values
-    .slice(1)
-    .map((row) => [coerce(row?.[0])]);
+  // 2) Read only column A, from row 1..totalRows
+  //    (Indexes are 0-based; column A is index 0)
+  const firstDataRowIndex = skipHeader ? 1 : 0;
+  const dataRowCount = totalRows - firstDataRowIndex;
 
-  if (firstCol.length === 0) {
-    console.log('No data rows after skipping header.');
+  const colARange = ws.getRangeByIndexes(firstDataRowIndex, 0, dataRowCount, 1);
+  const colAValues = colARange.getValues() as (
+    | string
+    | number
+    | boolean
+    | null
+  )[][];
+  if (!colAValues || colAValues.length === 0) {
+    console.log('Column A has no readable values in the detected range.');
     return;
   }
 
-  const total = firstCol.length;
+  // 3) Coerce null/undefined to empty strings for safe setValues()
+  const cleaned: (string | number | boolean)[][] = colAValues.map((r) => [
+    coerce(r?.[0]),
+  ]);
+
+  // 4) Split into sheets of ≤ maxRowsPerSheet
+  const total = cleaned.length;
   const chunks = Math.ceil(total / maxRowsPerSheet);
 
   for (let i = 0; i < chunks; i++) {
     const start = i * maxRowsPerSheet;
     const end = Math.min(start + maxRowsPerSheet, total);
-    const slice = firstCol.slice(start, end);
+    const slice = cleaned.slice(start, end);
 
-    const newWsName = `Split_${String(i + 1).padStart(2, '0')}`;
-    const newWs = workbook.addWorksheet(newWsName);
-
+    const newWs = workbook.addWorksheet(
+      `Split_${String(i + 1).padStart(2, '0')}`
+    );
     const outRange = newWs.getRangeByIndexes(0, 0, slice.length, 1);
     outRange.setValues(slice);
     outRange.getFormat().autofitColumns();

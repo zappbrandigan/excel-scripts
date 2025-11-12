@@ -1,16 +1,26 @@
 Sub PrepareAndExportSheetsToPDF()
+    Dim wb As Workbook
     Dim ws As Worksheet
     Dim pdfPath As String
     Dim safeName As String
     
-    pdfPath = ThisWorkbook.Path & "\"
+    ' Reference the workbook that’s currently active
+    Set wb = ActiveWorkbook
     
-    For Each ws In ThisWorkbook.Worksheets
-        ' Activate the sheet
+    ' Use that workbook’s folder for output
+    pdfPath = wb.Path & "\"
+    
+    ' If the workbook hasn’t been saved yet
+    If pdfPath = "\" Then
+        MsgBox "Please save your workbook first before exporting.", vbExclamation
+        Exit Sub
+    End If
+    
+    For Each ws In wb.Worksheets
         ws.Activate
         
         ' Delete column I (9th column)
-        On Error Resume Next ' Ignore if column I doesn’t exist
+        On Error Resume Next
         ws.Columns("I").Delete
         On Error GoTo 0
         
@@ -18,7 +28,11 @@ Sub PrepareAndExportSheetsToPDF()
         ws.Columns("H").ColumnWidth = 25
         ws.Columns("I").ColumnWidth = 25
         
-        ' Prepare a filename-safe version of the sheet name
+        ' Auto-fit for content and row heights
+        ws.Columns("H:I").AutoFit
+        ws.Rows.AutoFit
+        
+        ' Clean up file name
         safeName = ws.Name
         safeName = Replace(safeName, "/", "_")
         safeName = Replace(safeName, "\", "_")
@@ -28,7 +42,7 @@ Sub PrepareAndExportSheetsToPDF()
         safeName = Replace(safeName, "[", "_")
         safeName = Replace(safeName, "]", "_")
         
-        ' Export as PDF
+        ' Export as PDF to the same folder as the workbook
         ws.ExportAsFixedFormat Type:=xlTypePDF, _
             Filename:=pdfPath & safeName & ".pdf", _
             Quality:=xlQualityStandard, _

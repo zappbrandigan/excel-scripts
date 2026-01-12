@@ -16,8 +16,8 @@
  * Features:
  * - Choose the target column by its letter (e.g., "C" or "AA").
  * - Select a distribution mode:
- *   • "roundRobin" → cycle through names row-by-row (Alice, Bob, Charlie, …).
- *   • "block" → assign names in contiguous blocks, dividing rows evenly.
+ *   - "roundRobin" → cycle through names row-by-row (Alice, Bob, Charlie, …).
+ *   - "block" → assign names in contiguous blocks, dividing rows evenly.
  * - Names are defined in a configurable array within the script.
  *
  * Parameters:
@@ -33,15 +33,6 @@
  * Notes:
  * - The header row is assumed to be the first row of the used range.
  * - Adjust the `NAMES` array inside the script to fit your team’s needs.
- */
-
-/**
- * Distributes names from a predefined list into the chosen column.
- * Choose "roundRobin" to cycle names row-by-row or "block" for contiguous groups.
- *
- * @param workbook The active workbook (provided automatically).
- * @param columnLetter The target column letter (e.g., "C", "AA").
- * @param mode Distribution mode: "roundRobin" or "block".
  */
 function main(
   workbook: ExcelScript.Workbook,

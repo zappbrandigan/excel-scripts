@@ -5,7 +5,7 @@
  * Company: Universal Music Publishing Group
  * Script Name: Cue Report
  * Author: Brandon Johnson
- * Date 2025-09-10
+ * Date: 2025-09-10
  * Version: 1.0.0
  * ---------------------------------------------------------------------------
  * Description:

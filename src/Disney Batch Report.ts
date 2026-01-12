@@ -5,7 +5,7 @@
  * Company: Universal Music Publishing Group
  * Script Name: DSL Batch Report
  * Author: Brandon Johnson
- * Date 2025-08-21
+ * Date: 2025-08-21
  * Version: 1.1.0
  * ---------------------------------------------------------------------------
  * Description:
@@ -30,7 +30,6 @@
  * - Column indexes in this script are 0-based for Office Scripts API
  *
  */
-
 function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 

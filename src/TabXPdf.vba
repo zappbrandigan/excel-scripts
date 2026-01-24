@@ -1,6 +1,5 @@
 '
 ' ---------------------------------------------------------------------------
-' Company: Universal Music Publishing Group
 ' Script Name: Tab Export to PDF
 ' Author: Brandon Johnson
 ' Date: 2026-01-11

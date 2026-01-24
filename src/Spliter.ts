@@ -2,7 +2,6 @@
 
 /**
  * ---------------------------------------------------------------------------
- * Company: Universal Music Publishing Group
  * Script Name: Split Column A to Sheets
  * Author: Brandon Johnson
  * Date: 2026-01-11

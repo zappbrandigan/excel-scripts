@@ -25,6 +25,41 @@ const removeOfficeScriptsRef = (text) =>
 // escape them to "\n" in the final .osts file.
 const normalizeNewlines = (text) => text.replace(/\r\n/g, '\n');
 
+// Extract the initial comment block (top-of-file) for README content
+function extractInitialCommentBlock(text) {
+  const leading = text.replace(/^\s*/, '');
+
+  if (leading.startsWith('/*')) {
+    const m = leading.match(/^\/\*[\s\S]*?\*\//);
+    if (!m) return null;
+    return m[0]
+      .replace(/^\/\*+|\*+\/$/g, '')
+      .replace(/^\s*\*\s?/gm, '')
+      .trim();
+  }
+
+  if (leading.startsWith('//')) {
+    const m = leading.match(/^(?:\s*\/\/[^\n]*\n?)+/);
+    if (!m) return null;
+    return m[0].replace(/^\s*\/\/\s?/gm, '').trim();
+  }
+
+  return null;
+}
+
+function formatReadme(text) {
+  const lines = text.split('\n');
+  const formatted = lines
+    .filter((line) => !/^\s*-{3,}\s*$/.test(line))
+    .map((line) => {
+      const m = line.match(/^(\s*)([^:\n]+?)\s*:\s*(.*)$/);
+      if (!m) return line;
+      const [, indent, key, value] = m;
+      return `${indent}**${key.trim()}**: ${value}  `;
+    });
+  return formatted.join('\n').trim();
+}
+
 // Extract the nearest comment block above main() for metadata
 function extractHeaderMetadata(text) {
   // Find the main function (supports `function main` or `export default function main`)
@@ -105,12 +140,15 @@ async function main() {
     await fs.ensureDir(outDir);
 
     for (const file of files) {
+      const baseName = path.basename(file, '.ts');
       const fileName = path.basename(toOsts(file));
-      const destPath = path.join(outDir, fileName);
+      const destDir = path.join(outDir, baseName);
+      const destPath = path.join(destDir, fileName);
 
       const srcText = await fs.readFile(file, 'utf8');
 
       const cleaned = removeOfficeScriptsRef(srcText);
+      const readmeText = extractInitialCommentBlock(cleaned);
       const { version: parsedVersion, description: parsedDescription } =
         extractHeaderMetadata(cleaned);
 
@@ -128,7 +166,16 @@ async function main() {
       // Compact JSON (Excel is fine with this)
       const json = JSON.stringify(osts);
 
+      await fs.ensureDir(destDir);
       await fs.outputFile(destPath, json, 'utf8');
+      if (readmeText) {
+        const formattedReadme = formatReadme(readmeText);
+        await fs.outputFile(
+          path.join(destDir, 'README.md'),
+          `${formattedReadme}\n`,
+          'utf8'
+        );
+      }
       console.log(
         `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
           __dirname,

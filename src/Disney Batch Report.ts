@@ -2,7 +2,6 @@
 
 /**
  * ---------------------------------------------------------------------------
- * Company: Universal Music Publishing Group
  * Script Name: DSL Batch Report
  * Author: Brandon Johnson
  * Date: 2025-08-21

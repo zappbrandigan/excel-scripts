@@ -27,7 +27,7 @@ const normalizeNewlines = (text) => text.replace(/\r\n/g, '\n');
 
 // Extract the initial comment block (top-of-file) for README content
 function extractInitialCommentBlock(text) {
-  const leading = text.replace(/^\s*/, '');
+  const leading = text.replace(/^\uFEFF?\s*/, '');
 
   if (leading.startsWith('/*')) {
     const m = leading.match(/^\/\*[\s\S]*?\*\//);
@@ -42,6 +42,15 @@ function extractInitialCommentBlock(text) {
     const m = leading.match(/^(?:\s*\/\/[^\n]*\n?)+/);
     if (!m) return null;
     return m[0].replace(/^\s*\/\/\s?/gm, '').trim();
+  }
+
+  if (/^'/.test(leading) || /^Rem\b/i.test(leading)) {
+    const m = leading.match(/^(?:\s*'(?:[^\n]*)(?:\n|$)|\s*Rem\b[^\n]*\n?)+/i);
+    if (!m) return null;
+    return m[0]
+      .replace(/^\s*'\s?/gm, '')
+      .replace(/^\s*Rem\b\s?/gim, '')
+      .trim();
   }
 
   return null;
@@ -136,38 +145,64 @@ const defaultApiInfo = JSON.stringify({
 
 async function main() {
   try {
-    const files = await glob(path.join(srcDir, '*.ts')); // flat match
+    const tsFiles = await glob(path.join(srcDir, '*.ts')); // flat match
+    const vbaFiles = await glob(path.join(srcDir, '*.vba')); // flat match
+    const files = [...tsFiles, ...vbaFiles];
     await fs.ensureDir(outDir);
 
     for (const file of files) {
-      const baseName = path.basename(file, '.ts');
-      const fileName = path.basename(toOsts(file));
+      const ext = path.extname(file).toLowerCase();
+      const baseName = path.basename(file, ext);
+      const fileName = ext === '.ts' ? path.basename(toOsts(file)) : path.basename(file);
       const destDir = path.join(outDir, baseName);
       const destPath = path.join(destDir, fileName);
 
       const srcText = await fs.readFile(file, 'utf8');
 
-      const cleaned = removeOfficeScriptsRef(srcText);
+      const cleaned = ext === '.ts' ? removeOfficeScriptsRef(srcText) : srcText;
       const readmeText = extractInitialCommentBlock(cleaned);
-      const { version: parsedVersion, description: parsedDescription } =
-        extractHeaderMetadata(cleaned);
-
-      // Keep real newlines; JSON.stringify will emit "\n" in the .osts.
-      const body = normalizeNewlines(cleaned);
-
-      const osts = {
-        version: parsedVersion || '0.2.0',
-        body,
-        description: parsedDescription || '',
-        parameterInfo: defaultParameterInfo,
-        apiInfo: defaultApiInfo,
-      };
-
-      // Compact JSON (Excel is fine with this)
-      const json = JSON.stringify(osts);
 
       await fs.ensureDir(destDir);
-      await fs.outputFile(destPath, json, 'utf8');
+
+      if (ext === '.ts') {
+        const { version: parsedVersion, description: parsedDescription } =
+          extractHeaderMetadata(cleaned);
+
+        // Keep real newlines; JSON.stringify will emit "\n" in the .osts.
+        const body = normalizeNewlines(cleaned);
+
+        const osts = {
+          version: parsedVersion || '0.2.0',
+          body,
+          description: parsedDescription || '',
+          parameterInfo: defaultParameterInfo,
+          apiInfo: defaultApiInfo,
+        };
+
+        // Compact JSON (Excel is fine with this)
+        const json = JSON.stringify(osts);
+
+        await fs.outputFile(destPath, json, 'utf8');
+        console.log(
+          `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
+            __dirname,
+            destPath
+          )} (version=${osts.version}${
+            osts.description ? `, description="${osts.description}"` : ''
+          })`
+        );
+      } else if (ext === '.vba') {
+        await fs.copyFile(file, destPath);
+        console.log(
+          `Copied: ${path.relative(__dirname, file)} → ${path.relative(
+            __dirname,
+            destPath
+          )}`
+        );
+      } else {
+        continue;
+      }
+
       if (readmeText) {
         const formattedReadme = formatReadme(readmeText);
         await fs.outputFile(
@@ -176,14 +211,6 @@ async function main() {
           'utf8'
         );
       }
-      console.log(
-        `Wrote: ${path.relative(__dirname, file)} → ${path.relative(
-          __dirname,
-          destPath
-        )} (version=${osts.version}${
-          osts.description ? `, description="${osts.description}"` : ''
-        })`
-      );
     }
   } catch (err) {
     console.error('Copy failed:', err);

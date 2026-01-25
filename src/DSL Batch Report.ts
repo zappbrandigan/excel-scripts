@@ -8,7 +8,7 @@
  * Version: 1.1.0
  * ---------------------------------------------------------------------------
  * Description:
- * Automates preperation of Disney CWR batch validation report.
+ * Automates preperation of DSL CWR batch validation report.
  *
  * Features:
  * - Inserts columns and headers for Pref Code, AKAs, ISRCs, Setup Note, Assigned To, IPI, and PRO

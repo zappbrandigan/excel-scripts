@@ -32,25 +32,34 @@ function extractInitialCommentBlock(text) {
   if (leading.startsWith('/*')) {
     const m = leading.match(/^\/\*[\s\S]*?\*\//);
     if (!m) return null;
-    return m[0]
-      .replace(/^\/\*+|\*+\/$/g, '')
-      .replace(/^\s*\*\s?/gm, '')
-      .trim();
+    const inner = m[0].replace(/^\/\*+|\*+\/$/g, '');
+    const lines = inner.split('\n').map((line) => {
+      if (/^\s*\*?\s*$/.test(line)) return '';
+      return line.replace(/^\s*\*\s?/, '');
+    });
+    return lines.join('\n').replace(/\s*$/, '');
   }
 
   if (leading.startsWith('//')) {
     const m = leading.match(/^(?:\s*\/\/[^\n]*\n?)+/);
     if (!m) return null;
-    return m[0].replace(/^\s*\/\/\s?/gm, '').trim();
+    const lines = m[0].split('\n').map((line) => {
+      if (line.trim() === '') return '';
+      return line.replace(/^\s*\/\/\s?/, '');
+    });
+    return lines.join('\n').replace(/\s*$/, '');
   }
 
   if (/^'/.test(leading) || /^Rem\b/i.test(leading)) {
     const m = leading.match(/^(?:\s*'(?:[^\n]*)(?:\n|$)|\s*Rem\b[^\n]*\n?)+/i);
     if (!m) return null;
-    return m[0]
-      .replace(/^\s*'\s?/gm, '')
-      .replace(/^\s*Rem\b\s?/gim, '')
-      .trim();
+    const lines = m[0].split('\n').map((line) => {
+      if (line.trim() === '') return '';
+      return line
+        .replace(/^\s*'\s?/, '')
+        .replace(/^\s*Rem\b\s?/i, '');
+    });
+    return lines.join('\n').replace(/\s*$/, '');
   }
 
   return null;
@@ -58,15 +67,16 @@ function extractInitialCommentBlock(text) {
 
 function formatReadme(text) {
   const lines = text.split('\n');
-  const formatted = lines
-    .filter((line) => !/^\s*-{3,}\s*$/.test(line))
-    .map((line) => {
-      const m = line.match(/^(\s*)([^:\n]+?)\s*:\s*(.*)$/);
-      if (!m) return line;
-      const [, indent, key, value] = m;
-      return `${indent}**${key.trim()}**: ${value}  `;
-    });
-  return formatted.join('\n').trim();
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  const formatted = lines.map((line) => {
+    if (/^\s*-{3,}\s*$/.test(line)) return '';
+    if (line.trim() === '') return '';
+    const m = line.match(/^(\s*)([^:\n]+?)\s*:\s*(.*)$/);
+    if (!m) return line.trimEnd();
+    const [, indent, key, value] = m;
+    return `${indent}**${key.trim()}**: ${value}  `;
+  });
+  return formatted.join('\n').replace(/\s*$/, '');
 }
 
 // Extract the nearest comment block above main() for metadata

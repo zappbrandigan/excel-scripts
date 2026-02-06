@@ -9,17 +9,23 @@
 ' Automates separation of data in an Excel sheet to multiple sheets and separate workbooks.
 '
 ' Features:
-' - Creates a backup of the original file before processing (*-backup.xlsx)
 ' - Identifies a sheet with name "MECH"
-' - Creates a separate sheet for each artist name from the "Artist" column (tentatively column E)
-'   - Each sheet is named the same as the artist (invalid sheet name characters are escaped)
+' - Creates a separate sheet for each artist name from the "Artist" column (fallback column E)
+'   - Artist names are normalized (e.g., removes "feat/featuring/ft" and keeps the first artist in comma/& lists)
+'   - Each sheet is named the same as the normalized artist (invalid sheet name characters are escaped)
 '   - Each sheet contains all column data from every row that matches the artist for that sheet
 '   - Original formatting and styling are preserved
-'   - Creates separator row (a solid grey fill) to visually group the data by UPC: column title is "Product #" (tentatively column D)
+'   - Creates separator rows (solid grey fill) to visually group the data by UPC (column "Product #", fallback column D)
+' - Creates an output directory alongside the workbook: <WorkbookName>_BLR
+' - Exports one workbook per Product Title (column "Product Title", fallback column F)
+'   - Each output file is named "<Artist> - <Product Title> - Bulk License (MM.DD.YYYY).xlsx"
+'   - Bulk Feed Date is read from column "Bulk Feed Date" (column A) and formatted as (MM.DD.YYYY)
+'   - Output filenames are sanitized and truncated to avoid Windows path limits (product title trimmed first)
+'   - Within each output file, UPCs are grouped with grey separator rows
+' - Status bar updates show progress during sheet creation and exports
 '
 ' Notes:
-' - Workbook must be saved before running (backup uses SaveCopyAs).
-' - Optional MaxArtists parameter limits number of artist sheets created for testing.
+' - MaxArtists parameter limits number of artist sheets created.
 '
 Option Explicit
 
@@ -108,9 +114,6 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     Application.DisplayStatusBar = True
     
     On Error GoTo CleanUp
-    
-    ' Create file backup
-    CreateBackupFile wb
     
     ' Collect artists in order of appearance
     Set artists = New Collection
@@ -686,23 +689,3 @@ Private Function WorksheetExists(ByVal wb As Workbook, ByVal name As String) As 
     Set ws = Nothing
     On Error GoTo 0
 End Function
-
-Private Sub CreateBackupFile(ByVal wb As Workbook)
-    Dim folderPath As String
-    Dim fileName As String
-    Dim baseName As String
-    Dim backupPath As String
-    Dim dotPos As Long
-    
-    folderPath = wb.Path
-    fileName = wb.Name
-    dotPos = InStrRev(fileName, ".")
-    If dotPos > 0 Then
-        baseName = Left$(fileName, dotPos - 1)
-    Else
-        baseName = fileName
-    End If
-    
-    backupPath = folderPath & "\" & baseName & "-backup.xlsx"
-    wb.SaveCopyAs backupPath
-End Sub

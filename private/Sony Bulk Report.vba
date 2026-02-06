@@ -33,7 +33,7 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     Dim used As Range
     Dim header As Range
     Dim lastRow As Long, lastCol As Long
-    Dim artistCol As Long, upcCol As Long
+    Dim artistCol As Long, upcCol As Long, titleCol As Long
     Dim artists As Collection
     Dim dict As Object
     Dim r As Long
@@ -78,10 +78,12 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     Set header = wsMech.Range(wsMech.Cells(1, 1), wsMech.Cells(1, lastCol))
     artistCol = FindHeaderColumn(header, Array("Artist"))
     upcCol = FindHeaderColumn(header, Array("Product #", "Product#", "Product Number", "UPC"))
+    titleCol = FindHeaderColumn(header, Array("Product Title", "Title"))
     
     ' Fallback to tentative columns if headers aren't found
     If artistCol = 0 And lastCol >= 5 Then artistCol = 5 ' column E
     If upcCol = 0 And lastCol >= 4 Then upcCol = 4 ' column D
+    If titleCol = 0 And lastCol >= 6 Then titleCol = 6 ' column F
     
     If artistCol = 0 Then
         MsgBox "Couldn't find an ""Artist"" column.", vbExclamation
@@ -89,6 +91,10 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     End If
     If upcCol = 0 Then
         MsgBox "Couldn't find a ""Product #"" column.", vbExclamation
+        Exit Sub
+    End If
+    If titleCol = 0 Then
+        MsgBox "Couldn't find a ""Product Title"" column.", vbExclamation
         Exit Sub
     End If
     
@@ -128,6 +134,10 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     For i = 1 To artists.Count
         If MaxArtists > 0 And created >= MaxArtists Then Exit For
         artist = CStr(artists(i))
+        Application.StatusBar = "Creating sheet " & (created + 1) & " of " & _
+            IIf(MaxArtists > 0 And MaxArtists < artists.Count, MaxArtists, artists.Count) & _
+            " | Artist: " & artist
+        DoEvents
         Dim sheetName As String
         sheetName = CreateArtistSheet(wb, wsMech, artist, artistCol, upcCol, lastRow, lastCol)
         createdSheets.Add sheetName
@@ -138,7 +148,7 @@ Public Sub SonyBulkReport(Optional ByVal MaxArtists As Long = 0)
     outputDir = CreateOutputDirectory(wb)
     
     ' Create workbooks per artist sheet / UPC
-    ExportArtistSheetsToWorkbooks wb, createdSheets, outputDir, upcCol
+    ExportArtistSheetsToWorkbooks wb, createdSheets, outputDir, titleCol, upcCol
     
     MsgBox "Created " & created & " artist sheet(s) and exported workbooks to:" & vbCrLf & outputDir, vbInformation
     
@@ -211,39 +221,40 @@ Private Sub ExportArtistSheetsToWorkbooks( _
     ByVal wb As Workbook, _
     ByVal createdSheets As Collection, _
     ByVal outputDir As String, _
+    ByVal titleCol As Long, _
     ByVal upcCol As Long)
     
     Dim i As Long
     Dim ws As Worksheet
-    Dim upcKeys As Collection
-    Dim upcFirstRow As Collection
+    Dim titleKeys As Collection
+    Dim titleFirstRow As Collection
     Dim r As Long
     Dim lastRow As Long, lastCol As Long
-    Dim upc As String
+    Dim title As String
     Dim key As String
-    Dim totalUpcs As Long
-    Dim processedUpcs As Long
+    Dim totalTitles As Long
+    Dim processedTitles As Long
     
     Dim failures As Collection
     Set failures = New Collection
     
     ' First pass: count total UPCs for progress
-    totalUpcs = 0
+    totalTitles = 0
     For i = 1 To createdSheets.Count
         Set ws = wb.Worksheets(CStr(createdSheets(i)))
         If ws Is Nothing Then GoTo NextCountSheet
-        Set upcKeys = GetUniqueUpcs(ws, upcCol)
-        totalUpcs = totalUpcs + upcKeys.Count
+        Set titleKeys = GetUniqueKeys(ws, titleCol)
+        totalTitles = totalTitles + titleKeys.Count
 NextCountSheet:
         Set ws = Nothing
     Next i
     
-    If totalUpcs = 0 Then
-        MsgBox "No UPCs found to export. Check the ""Product #"" column and data.", vbExclamation
+    If totalTitles = 0 Then
+        MsgBox "No Product Titles found to export. Check the ""Product Title"" column and data.", vbExclamation
         Exit Sub
     End If
     
-    ShowProgress totalUpcs
+    ShowProgress totalTitles
     
     For i = 1 To createdSheets.Count
         Set ws = wb.Worksheets(CStr(createdSheets(i)))
@@ -253,26 +264,26 @@ NextCountSheet:
         lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
         If lastRow < 2 Then GoTo NextSheet
         
-        Set upcKeys = New Collection
-        Set upcFirstRow = New Collection
+        Set titleKeys = New Collection
+        Set titleFirstRow = New Collection
         
         For r = 2 To lastRow
-            upc = Trim$(CStr(ws.Cells(r, upcCol).Value))
-            If Len(upc) = 0 Then GoTo ContinueRow
-            If Not CollectionKeyExists(upcKeys, upc) Then
-                upcKeys.Add upc, upc
-                upcFirstRow.Add r, upc
+            title = Trim$(CStr(ws.Cells(r, titleCol).Value))
+            If Len(title) = 0 Then GoTo ContinueRow
+            If Not CollectionKeyExists(titleKeys, title) Then
+                titleKeys.Add title, title
+                titleFirstRow.Add r, title
             End If
 ContinueRow:
         Next r
         
         Dim u As Long
-        For u = 1 To upcKeys.Count
-            key = CStr(upcKeys(u))
-            processedUpcs = processedUpcs + 1
-            UpdateProgress processedUpcs, totalUpcs, ws.Name, key
+        For u = 1 To titleKeys.Count
+            key = CStr(titleKeys(u))
+            processedTitles = processedTitles + 1
+            UpdateProgress processedTitles, totalTitles, ws.Name, key
             On Error GoTo ExportFail
-            ExportUPCWorkbook ws, key, CLng(upcFirstRow(key)), lastCol, outputDir, upcCol
+            ExportTitleWorkbook ws, key, CLng(titleFirstRow(key)), lastCol, outputDir, titleCol, upcCol
             On Error GoTo 0
         Next u
         
@@ -291,17 +302,18 @@ NextSheet:
     Exit Sub
     
 ExportFail:
-    failures.Add ws.Name & " / UPC " & key & " -> " & Err.Description
+    failures.Add ws.Name & " / Title " & key & " -> " & Err.Description
     Err.Clear
     Resume Next
 End Sub
 
-Private Sub ExportUPCWorkbook( _
+Private Sub ExportTitleWorkbook( _
     ByVal ws As Worksheet, _
-    ByVal upc As String, _
+    ByVal title As String, _
     ByVal firstRow As Long, _
     ByVal lastCol As Long, _
     ByVal outputDir As String, _
+    ByVal titleCol As Long, _
     ByVal upcCol As Long)
     
     Dim artistName As String
@@ -314,11 +326,12 @@ Private Sub ExportUPCWorkbook( _
     Dim wsOut As Worksheet
     Dim r As Long
     Dim lastRow As Long
-    Dim rng As Range
-    Dim visible As Range
+    Dim targetRow As Long
+    Dim upc As String, lastUpc As String
+    Dim srcRow As Range
     
     artistName = ws.Name
-    productTitle = Trim$(CStr(ws.Cells(firstRow, 6).Value)) ' Column F
+    productTitle = Trim$(CStr(ws.Cells(firstRow, titleCol).Value))
     bulkFeedDate = ws.Cells(firstRow, 1).Value ' Column A
     datePart = FormatBulkFeedDate(bulkFeedDate)
     
@@ -329,21 +342,31 @@ Private Sub ExportUPCWorkbook( _
     Set wsOut = wbOut.Worksheets(1)
     wsOut.Name = Left$(SanitizeSheetName(artistName), 31)
     
-    ' Filter and copy visible rows (preserves full styling)
+    ' Copy header row with formatting
+    SafeCopyPasteAll ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol)), wsOut.Range("A1")
+    
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    Set rng = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
-    rng.AutoFilter Field:=upcCol, Criteria1:=upc
+    targetRow = 2
+    lastUpc = vbNullString
     
-    On Error Resume Next
-    Set visible = rng.SpecialCells(xlCellTypeVisible)
-    On Error GoTo 0
-    
-    If Not visible Is Nothing Then
-        SafeCopyPasteAll visible, wsOut.Range("A1")
-    End If
-    
-    If ws.AutoFilterMode Then ws.AutoFilterMode = False
-    Application.CutCopyMode = False
+    For r = 2 To lastRow
+        If Trim$(CStr(ws.Cells(r, titleCol).Value)) = title Then
+            upc = Trim$(CStr(ws.Cells(r, upcCol).Value))
+            If Len(upc) > 0 Then
+                If targetRow > 2 And upc <> lastUpc Then
+                    With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
+                        .ClearContents
+                        .Interior.Color = RGB(192, 192, 192)
+                    End With
+                    targetRow = targetRow + 1
+                End If
+                Set srcRow = ws.Range(ws.Cells(r, 1), ws.Cells(r, lastCol))
+                SafeCopyPasteAll srcRow, wsOut.Cells(targetRow, 1)
+                targetRow = targetRow + 1
+                lastUpc = upc
+            End If
+        End If
+    Next r
     
     On Error GoTo SaveFail
     Application.DisplayAlerts = False
@@ -508,34 +531,34 @@ Private Function CollectionKeyExists(ByVal col As Collection, ByVal key As Strin
     On Error GoTo 0
 End Function
 
-Private Function GetUniqueUpcs(ByVal ws As Worksheet, ByVal upcCol As Long) As Collection
+Private Function GetUniqueKeys(ByVal ws As Worksheet, ByVal keyCol As Long) As Collection
     Dim col As New Collection
     Dim lastRow As Long
     Dim r As Long
-    Dim upc As String
+    Dim key As String
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     For r = 2 To lastRow
-        upc = Trim$(CStr(ws.Cells(r, upcCol).Value))
-        If Len(upc) = 0 Then GoTo ContinueRow
-        If Not CollectionKeyExists(col, upc) Then col.Add upc, upc
+        key = Trim$(CStr(ws.Cells(r, keyCol).Value))
+        If Len(key) = 0 Then GoTo ContinueRow
+        If Not CollectionKeyExists(col, key) Then col.Add key, key
 ContinueRow:
     Next r
-    Set GetUniqueUpcs = col
+    Set GetUniqueKeys = col
 End Function
 
-Private Sub ShowProgress(ByVal totalUpcs As Long)
-    Application.StatusBar = "Preparing exports... (0 of " & totalUpcs & " UPCs)"
+Private Sub ShowProgress(ByVal totalTitles As Long)
+    Application.StatusBar = "Preparing exports... (0 of " & totalTitles & " Titles)"
     DoEvents
 End Sub
 
 Private Sub UpdateProgress( _
-    ByVal currentUpc As Long, _
-    ByVal totalUpcs As Long, _
+    ByVal currentTitle As Long, _
+    ByVal totalTitles As Long, _
     ByVal artistName As String, _
-    ByVal upc As String)
+    ByVal title As String)
     
-    Application.StatusBar = "Exporting " & currentUpc & " of " & totalUpcs & _
-        " UPCs | Artist: " & artistName & " | UPC: " & upc
+    Application.StatusBar = "Exporting " & currentTitle & " of " & totalTitles & _
+        " Titles | Artist: " & artistName & " | Title: " & title
     DoEvents
 End Sub
 

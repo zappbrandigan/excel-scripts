@@ -240,6 +240,10 @@ Private Sub SBR_ExportGroupWorkbook( _
     Dim runStartRow As Long
     Dim runEndRow As Long
     Dim nextRowNum As Long
+    Dim upcOrder As Collection
+    Dim upcRows As Object
+    Dim upcKey As Variant
+    Dim upcBucket As Collection
 
     bulkFeedDate = wsMech.Cells(firstRow, 1).Value
     datePart = SBR_FormatBulkFeedDate(bulkFeedDate)
@@ -256,28 +260,45 @@ Private Sub SBR_ExportGroupWorkbook( _
     targetRow = 2
     lastUpc = vbNullString
 
-    idx = 1
-    Do While idx <= rowBucket.Count
+    Set upcOrder = New Collection
+    Set upcRows = CreateObject("Scripting.Dictionary")
+    For idx = 1 To rowBucket.Count
         rowNum = CLng(rowBucket(idx))
         upc = Trim$(CStr(wsMech.Cells(rowNum, upcCol).Value))
         If Len(upc) > 0 Then
-            If targetRow > 2 And upc <> lastUpc Then
-                With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
-                    .ClearContents
-                    .Interior.Color = RGB(192, 192, 192)
-                End With
-                targetRow = targetRow + 1
+            If Not upcRows.Exists(upc) Then
+                Set upcBucket = New Collection
+                upcRows.Add upc, upcBucket
+                upcOrder.Add upc
             End If
+            Set upcBucket = upcRows(upc)
+            upcBucket.Add rowNum
+        End If
+    Next idx
 
+    For Each upcKey In upcOrder
+        upc = CStr(upcKey)
+        Set upcBucket = upcRows(upc)
+
+        If targetRow > 2 And upc <> lastUpc Then
+            With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
+                .ClearContents
+                .Interior.Color = RGB(192, 192, 192)
+            End With
+            targetRow = targetRow + 1
+        End If
+
+        idx = 1
+        Do While idx <= upcBucket.Count
+            rowNum = CLng(upcBucket(idx))
             runStartRow = rowNum
             runEndRow = rowNum
 
-            Do While idx < rowBucket.Count
-                nextRowNum = CLng(rowBucket(idx + 1))
+            Do While idx < upcBucket.Count
+                nextRowNum = CLng(upcBucket(idx + 1))
                 nextUpc = Trim$(CStr(wsMech.Cells(nextRowNum, upcCol).Value))
 
                 If nextRowNum <> runEndRow + 1 Then Exit Do
-                If Len(nextUpc) = 0 Then Exit Do
                 If nextUpc <> upc Then Exit Do
 
                 runEndRow = nextRowNum
@@ -287,10 +308,11 @@ Private Sub SBR_ExportGroupWorkbook( _
             Set srcBlock = wsMech.Range(wsMech.Cells(runStartRow, 1), wsMech.Cells(runEndRow, lastCol))
             SBR_SafeCopyPasteAll srcBlock, wsOut.Cells(targetRow, 1)
             targetRow = targetRow + (runEndRow - runStartRow + 1)
-            lastUpc = upc
-        End If
-        idx = idx + 1
-    Loop
+            idx = idx + 1
+        Loop
+
+        lastUpc = upc
+    Next upcKey
 
     On Error GoTo SaveFail
     Application.DisplayAlerts = False

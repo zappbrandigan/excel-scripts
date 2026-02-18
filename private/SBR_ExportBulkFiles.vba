@@ -255,7 +255,7 @@ Private Sub SBR_ExportGroupWorkbook( _
     Set wsOut = wbOut.Worksheets(1)
     wsOut.Name = Left$(SBR_SanitizeSheetName(artistName), 31)
 
-    SBR_SafePasteFormatsThenValues wsMech.Range(wsMech.Cells(1, 1), wsMech.Cells(1, lastCol)), wsOut.Range("A1")
+    SBR_SafeCopyPasteAll wsMech.Range(wsMech.Cells(1, 1), wsMech.Cells(1, lastCol)), wsOut.Range("A1")
 
     targetRow = 2
     lastUpc = vbNullString
@@ -306,7 +306,7 @@ Private Sub SBR_ExportGroupWorkbook( _
             Loop
 
             Set srcBlock = wsMech.Range(wsMech.Cells(runStartRow, 1), wsMech.Cells(runEndRow, lastCol))
-            SBR_SafePasteFormatsThenValues srcBlock, wsOut.Cells(targetRow, 1)
+            SBR_SafeCopyPasteValuesAndFormats srcBlock, wsOut.Cells(targetRow, 1)
             targetRow = targetRow + (runEndRow - runStartRow + 1)
             idx = idx + 1
         Loop

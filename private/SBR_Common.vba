@@ -360,54 +360,6 @@ RetryCopy:
     End If
 End Sub
 
-Public Sub SBR_SafePasteFormatsThenValues(ByVal src As Range, ByVal dest As Range)
-    Dim i As Long
-    Dim lastErr As Long
-    Dim lastDesc As String
-    Dim targetRange As Range
-
-    Set targetRange = dest.Resize(src.Rows.Count, src.Columns.Count)
-
-    For i = 1 To 10
-        On Error Resume Next
-        src.Copy
-        If Err.Number <> 0 Then
-            lastErr = Err.Number
-            lastDesc = Err.Description
-            Err.Clear
-            GoTo RetryCopy
-        End If
-
-        targetRange.PasteSpecial xlPasteFormats
-        If Err.Number <> 0 Then
-            lastErr = Err.Number
-            lastDesc = Err.Description
-            Err.Clear
-            GoTo RetryCopy
-        End If
-
-        targetRange.Value2 = src.Value2
-        If Err.Number <> 0 Then
-            lastErr = Err.Number
-            lastDesc = Err.Description
-            Err.Clear
-            GoTo RetryCopy
-        End If
-
-        On Error GoTo 0
-        Exit Sub
-RetryCopy:
-        On Error GoTo 0
-        Application.CutCopyMode = False
-        DoEvents
-        Application.Wait Now + TimeValue("0:00:01")
-    Next i
-
-    If lastErr <> 0 Then
-        Err.Raise lastErr, "SBR_SafePasteFormatsThenValues", lastDesc
-    End If
-End Sub
-
 Public Function SBR_CollectionKeyExists(ByVal col As Collection, ByVal key As String) As Boolean
     On Error Resume Next
     Dim tmp As Variant

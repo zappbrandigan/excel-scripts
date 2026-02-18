@@ -1,6 +1,6 @@
 '
 ' ---------------------------------------------------------------------------
-' Script Name: Sony Bulk Report
+' Script Name: SBR
 ' Author: Brandon Johnson
 ' Date: 2026-02-05
 ' Version: 1.0.0

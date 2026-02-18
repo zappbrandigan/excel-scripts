@@ -174,6 +174,65 @@ Public Function SBR_FormatBulkFeedDate(ByVal v As Variant) As String
     End If
 End Function
 
+Public Function SBR_CanonicalProductTitle(ByVal raw As String) As String
+    Dim s As String
+    s = Trim$(raw)
+    If Len(s) = 0 Then
+        SBR_CanonicalProductTitle = ""
+        Exit Function
+    End If
+
+    s = SBR_RemoveEpisodeMarkers(s)
+    s = SBR_CleanupTitleSpacing(s)
+    If Len(s) = 0 Then s = Trim$(raw)
+
+    SBR_CanonicalProductTitle = s
+End Function
+
+Private Function SBR_RemoveEpisodeMarkers(ByVal source As String) As String
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Global = True
+    re.IgnoreCase = True
+
+    re.Pattern = "\b(?:episode|ep\.?)\s*[-:#]?\s*\d+\b"
+    source = re.Replace(source, " ")
+
+    re.Pattern = "\(\s*\)"
+    source = re.Replace(source, " ")
+    re.Pattern = "\[\s*\]"
+    source = re.Replace(source, " ")
+
+    SBR_RemoveEpisodeMarkers = source
+End Function
+
+Private Function SBR_CleanupTitleSpacing(ByVal source As String) As String
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Global = True
+    re.IgnoreCase = True
+
+    re.Pattern = "\s{2,}"
+    source = re.Replace(source, " ")
+
+    re.Pattern = "\s*-\s*-\s*"
+    source = re.Replace(source, " - ")
+    re.Pattern = "\s*:\s*:\s*"
+    source = re.Replace(source, ": ")
+    re.Pattern = "\s*,\s*,\s*"
+    source = re.Replace(source, ", ")
+
+    source = Trim$(source)
+    Do While Len(source) > 0 And InStr(1, "-,:;|/", Left$(source, 1), vbBinaryCompare) > 0
+        source = Trim$(Mid$(source, 2))
+    Loop
+    Do While Len(source) > 0 And InStr(1, "-,:;|/", Right$(source, 1), vbBinaryCompare) > 0
+        source = Trim$(Left$(source, Len(source) - 1))
+    Loop
+
+    SBR_CleanupTitleSpacing = source
+End Function
+
 Public Function SBR_BuildSafeFileName( _
     ByVal artistName As String, _
     ByVal productTitle As String, _

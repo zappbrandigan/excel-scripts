@@ -5,8 +5,6 @@ Public Sub Run_SBR_ExportBulkFiles()
 End Sub
 
 Public Sub SBR_ExportBulkFiles()
-    Const KEY_SEP As String = "||~||"
-
     Dim wb As Workbook
     Dim wsMech As Worksheet
     Dim used As Range
@@ -17,6 +15,9 @@ Public Sub SBR_ExportBulkFiles()
     Dim upcCol As Long
     Dim titleCol As Long
     Dim groupFirstRow As Object
+    Dim groupRows As Object
+    Dim groupArtists As Object
+    Dim groupTitles As Object
     Dim groupKeys As Collection
     Dim outputDir As String
     Dim prevCalc As XlCalculation
@@ -26,13 +27,16 @@ Public Sub SBR_ExportBulkFiles()
     Dim totalGroups As Long
     Dim r As Long
     Dim artist As String
-    Dim title As String
+    Dim rawTitle As String
+    Dim canonicalTitle As String
     Dim groupKey As String
     Dim failures As Collection
     Dim i As Long
-    Dim sepPos As Long
     Dim firstRow As Long
+    Dim exportArtist As String
     Dim msg As String
+    Dim rowBucket As Collection
+    Dim artistBucket As Object
 
     Set wb = ActiveWorkbook
     If wb.Path = "" Then
@@ -97,20 +101,39 @@ Public Sub SBR_ExportBulkFiles()
     On Error GoTo CleanUp
 
     Set groupFirstRow = CreateObject("Scripting.Dictionary")
+    Set groupRows = CreateObject("Scripting.Dictionary")
+    Set groupArtists = CreateObject("Scripting.Dictionary")
+    Set groupTitles = CreateObject("Scripting.Dictionary")
     Set groupKeys = New Collection
 
     For r = 2 To lastRow
-        artist = SBR_NormalizeArtistName(Trim$(CStr(wsMech.Cells(r, artistCol).Value)))
-        If Len(artist) = 0 Then artist = "Unknown Artist"
+        rawTitle = Trim$(CStr(wsMech.Cells(r, titleCol).Value))
+        If Len(rawTitle) = 0 Then GoTo ContinueCollect
 
-        title = Trim$(CStr(wsMech.Cells(r, titleCol).Value))
-        If Len(title) = 0 Then GoTo ContinueCollect
+        canonicalTitle = SBR_CanonicalProductTitle(rawTitle)
+        If Len(canonicalTitle) = 0 Then canonicalTitle = rawTitle
+        groupKey = LCase$(canonicalTitle)
 
-        groupKey = artist & KEY_SEP & title
         If Not groupFirstRow.Exists(groupKey) Then
             groupFirstRow.Add groupKey, r
+            groupTitles.Add groupKey, canonicalTitle
+
+            Set rowBucket = New Collection
+            rowBucket.Add r
+            groupRows.Add groupKey, rowBucket
+
+            Set artistBucket = CreateObject("Scripting.Dictionary")
+            groupArtists.Add groupKey, artistBucket
             groupKeys.Add groupKey
+        Else
+            Set rowBucket = groupRows(groupKey)
+            rowBucket.Add r
         End If
+
+        artist = SBR_NormalizeArtistName(Trim$(CStr(wsMech.Cells(r, artistCol).Value)))
+        If Len(artist) = 0 Then artist = "Unknown Artist"
+        Set artistBucket = groupArtists(groupKey)
+        If Not artistBucket.Exists(artist) Then artistBucket.Add artist, True
 ContinueCollect:
     Next r
 
@@ -122,23 +145,21 @@ ContinueCollect:
 
     outputDir = SBR_CreateOutputDirectory(wb)
     SBR_ShowProgress totalGroups
-
     Set failures = New Collection
 
     For i = 1 To groupKeys.Count
         groupKey = CStr(groupKeys(i))
-        sepPos = InStr(1, groupKey, KEY_SEP, vbBinaryCompare)
-        If sepPos = 0 Then GoTo ContinueExport
-
-        artist = Left$(groupKey, sepPos - 1)
-        title = Mid$(groupKey, sepPos + Len(KEY_SEP))
         firstRow = CLng(groupFirstRow(groupKey))
+        canonicalTitle = CStr(groupTitles(groupKey))
+        Set rowBucket = groupRows(groupKey)
+        Set artistBucket = groupArtists(groupKey)
+        exportArtist = SBR_ResolveExportArtistName(artistBucket)
 
         processed = processed + 1
-        SBR_UpdateProgress processed, totalGroups, artist, title
+        SBR_UpdateProgress processed, totalGroups, exportArtist, canonicalTitle
 
         On Error GoTo ExportFail
-        SBR_ExportGroupWorkbook wsMech, artist, title, firstRow, lastRow, lastCol, outputDir, artistCol, titleCol, upcCol
+        SBR_ExportGroupWorkbook wsMech, exportArtist, canonicalTitle, rowBucket, firstRow, lastCol, outputDir, upcCol
         On Error GoTo CleanUp
 ContinueExport:
     Next i
@@ -168,21 +189,39 @@ CleanUp:
     Exit Sub
 
 ExportFail:
-    failures.Add artist & " / " & title & " -> " & Err.Description
+    failures.Add exportArtist & " / " & canonicalTitle & " -> " & Err.Description
     Err.Clear
     Resume ContinueExport
 End Sub
+
+Private Function SBR_ResolveExportArtistName(ByVal artistBucket As Object) As String
+    Dim key As Variant
+
+    If artistBucket Is Nothing Then
+        SBR_ResolveExportArtistName = "Unknown Artist"
+        Exit Function
+    End If
+
+    If artistBucket.Count = 0 Then
+        SBR_ResolveExportArtistName = "Unknown Artist"
+    ElseIf artistBucket.Count = 1 Then
+        For Each key In artistBucket.Keys
+            SBR_ResolveExportArtistName = CStr(key)
+            Exit Function
+        Next key
+    Else
+        SBR_ResolveExportArtistName = "Various"
+    End If
+End Function
 
 Private Sub SBR_ExportGroupWorkbook( _
     ByVal wsMech As Worksheet, _
     ByVal artistName As String, _
     ByVal productTitle As String, _
+    ByVal rowBucket As Collection, _
     ByVal firstRow As Long, _
-    ByVal lastRow As Long, _
     ByVal lastCol As Long, _
     ByVal outputDir As String, _
-    ByVal artistCol As Long, _
-    ByVal titleCol As Long, _
     ByVal upcCol As Long)
 
     Dim bulkFeedDate As Variant
@@ -191,11 +230,11 @@ Private Sub SBR_ExportGroupWorkbook( _
     Dim filePath As String
     Dim wbOut As Workbook
     Dim wsOut As Worksheet
-    Dim r As Long
     Dim targetRow As Long
     Dim upc As String
     Dim lastUpc As String
     Dim srcRow As Range
+    Dim rowNum As Variant
 
     bulkFeedDate = wsMech.Cells(firstRow, 1).Value
     datePart = SBR_FormatBulkFeedDate(bulkFeedDate)
@@ -212,27 +251,23 @@ Private Sub SBR_ExportGroupWorkbook( _
     targetRow = 2
     lastUpc = vbNullString
 
-    For r = 2 To lastRow
-        If SBR_NormalizeArtistName(Trim$(CStr(wsMech.Cells(r, artistCol).Value))) = artistName Then
-            If Trim$(CStr(wsMech.Cells(r, titleCol).Value)) = productTitle Then
-                upc = Trim$(CStr(wsMech.Cells(r, upcCol).Value))
-                If Len(upc) > 0 Then
-                    If targetRow > 2 And upc <> lastUpc Then
-                        With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
-                            .ClearContents
-                            .Interior.Color = RGB(192, 192, 192)
-                        End With
-                        targetRow = targetRow + 1
-                    End If
-
-                    Set srcRow = wsMech.Range(wsMech.Cells(r, 1), wsMech.Cells(r, lastCol))
-                    SBR_SafeCopyPasteAll srcRow, wsOut.Cells(targetRow, 1)
-                    targetRow = targetRow + 1
-                    lastUpc = upc
-                End If
+    For Each rowNum In rowBucket
+        upc = Trim$(CStr(wsMech.Cells(CLng(rowNum), upcCol).Value))
+        If Len(upc) > 0 Then
+            If targetRow > 2 And upc <> lastUpc Then
+                With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
+                    .ClearContents
+                    .Interior.Color = RGB(192, 192, 192)
+                End With
+                targetRow = targetRow + 1
             End If
+
+            Set srcRow = wsMech.Range(wsMech.Cells(CLng(rowNum), 1), wsMech.Cells(CLng(rowNum), lastCol))
+            SBR_SafeCopyPasteAll srcRow, wsOut.Cells(targetRow, 1)
+            targetRow = targetRow + 1
+            lastUpc = upc
         End If
-    Next r
+    Next rowNum
 
     On Error GoTo SaveFail
     Application.DisplayAlerts = False

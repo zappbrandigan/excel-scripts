@@ -306,7 +306,7 @@ Private Sub SBR_ExportGroupWorkbook( _
             Loop
 
             Set srcBlock = wsMech.Range(wsMech.Cells(runStartRow, 1), wsMech.Cells(runEndRow, lastCol))
-            SBR_SafeCopyPasteAll srcBlock, wsOut.Cells(targetRow, 1)
+            SBR_SafeCopyPasteValuesAndFormats srcBlock, wsOut.Cells(targetRow, 1)
             targetRow = targetRow + (runEndRow - runStartRow + 1)
             idx = idx + 1
         Loop

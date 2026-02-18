@@ -232,9 +232,14 @@ Private Sub SBR_ExportGroupWorkbook( _
     Dim wsOut As Worksheet
     Dim targetRow As Long
     Dim upc As String
+    Dim nextUpc As String
     Dim lastUpc As String
-    Dim srcRow As Range
-    Dim rowNum As Variant
+    Dim srcBlock As Range
+    Dim idx As Long
+    Dim rowNum As Long
+    Dim runStartRow As Long
+    Dim runEndRow As Long
+    Dim nextRowNum As Long
 
     bulkFeedDate = wsMech.Cells(firstRow, 1).Value
     datePart = SBR_FormatBulkFeedDate(bulkFeedDate)
@@ -251,8 +256,10 @@ Private Sub SBR_ExportGroupWorkbook( _
     targetRow = 2
     lastUpc = vbNullString
 
-    For Each rowNum In rowBucket
-        upc = Trim$(CStr(wsMech.Cells(CLng(rowNum), upcCol).Value))
+    idx = 1
+    Do While idx <= rowBucket.Count
+        rowNum = CLng(rowBucket(idx))
+        upc = Trim$(CStr(wsMech.Cells(rowNum, upcCol).Value))
         If Len(upc) > 0 Then
             If targetRow > 2 And upc <> lastUpc Then
                 With wsOut.Range(wsOut.Cells(targetRow, 1), wsOut.Cells(targetRow, lastCol))
@@ -262,12 +269,28 @@ Private Sub SBR_ExportGroupWorkbook( _
                 targetRow = targetRow + 1
             End If
 
-            Set srcRow = wsMech.Range(wsMech.Cells(CLng(rowNum), 1), wsMech.Cells(CLng(rowNum), lastCol))
-            SBR_SafeCopyPasteAll srcRow, wsOut.Cells(targetRow, 1)
-            targetRow = targetRow + 1
+            runStartRow = rowNum
+            runEndRow = rowNum
+
+            Do While idx < rowBucket.Count
+                nextRowNum = CLng(rowBucket(idx + 1))
+                nextUpc = Trim$(CStr(wsMech.Cells(nextRowNum, upcCol).Value))
+
+                If nextRowNum <> runEndRow + 1 Then Exit Do
+                If Len(nextUpc) = 0 Then Exit Do
+                If nextUpc <> upc Then Exit Do
+
+                runEndRow = nextRowNum
+                idx = idx + 1
+            Loop
+
+            Set srcBlock = wsMech.Range(wsMech.Cells(runStartRow, 1), wsMech.Cells(runEndRow, lastCol))
+            SBR_SafeCopyPasteAll srcBlock, wsOut.Cells(targetRow, 1)
+            targetRow = targetRow + (runEndRow - runStartRow + 1)
             lastUpc = upc
         End If
-    Next rowNum
+        idx = idx + 1
+    Loop
 
     On Error GoTo SaveFail
     Application.DisplayAlerts = False

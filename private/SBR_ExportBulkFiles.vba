@@ -4,7 +4,7 @@ Public Sub Run_SBR_ExportBulkFiles()
     Call SBR_ExportBulkFiles
 End Sub
 
-Public Sub SBR_ExportBulkFiles()
+Private Sub SBR_ExportBulkFiles()
     Dim wb As Workbook
     Dim wsMech As Worksheet
     Dim used As Range
@@ -14,6 +14,7 @@ Public Sub SBR_ExportBulkFiles()
     Dim artistCol As Long
     Dim upcCol As Long
     Dim titleCol As Long
+    Dim labelCol As Long
     Dim groupFirstRow As Object
     Dim groupRows As Object
     Dim groupArtists As Object
@@ -28,6 +29,7 @@ Public Sub SBR_ExportBulkFiles()
     Dim r As Long
     Dim artist As String
     Dim rawTitle As String
+    Dim labelValue As String
     Dim canonicalTitle As String
     Dim groupKey As String
     Dim failures As Collection
@@ -71,6 +73,7 @@ Public Sub SBR_ExportBulkFiles()
     artistCol = SBR_FindHeaderColumn(header, Array("Artist"))
     upcCol = SBR_FindHeaderColumn(header, Array("Product #", "Product#", "Product Number", "UPC"))
     titleCol = SBR_FindHeaderColumn(header, Array("Product Title", "Title"))
+    labelCol = 2
 
     If artistCol = 0 And lastCol >= 5 Then artistCol = 5
     If upcCol = 0 And lastCol >= 4 Then upcCol = 4
@@ -112,7 +115,8 @@ Public Sub SBR_ExportBulkFiles()
 
         canonicalTitle = SBR_CanonicalProductTitle(rawTitle)
         If Len(canonicalTitle) = 0 Then canonicalTitle = rawTitle
-        groupKey = LCase$(canonicalTitle)
+        labelValue = Trim$(CStr(wsMech.Cells(r, labelCol).Value))
+        groupKey = SBR_BuildTitleLabelGroupKey(canonicalTitle, labelValue)
 
         If Not groupFirstRow.Exists(groupKey) Then
             groupFirstRow.Add groupKey, r
@@ -193,6 +197,10 @@ ExportFail:
     Err.Clear
     Resume ContinueExport
 End Sub
+
+Private Function SBR_BuildTitleLabelGroupKey(ByVal productTitle As String, ByVal labelValue As String) As String
+    SBR_BuildTitleLabelGroupKey = productTitle & ChrW$(&H1F) & labelValue
+End Function
 
 Private Function SBR_ResolveExportArtistName(ByVal artistBucket As Object) As String
     Dim key As Variant

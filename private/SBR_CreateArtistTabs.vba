@@ -1,7 +1,7 @@
 Option Explicit
 
 Public Sub Run_SBR_CreateArtistTabs()
-    Call SBR_CreateArtistTabs(100)
+    Call SBR_CreateArtistTabs(1000)
 End Sub
 
 Public Sub SBR_CreateArtistTabs(Optional ByVal MaxArtists As Long = 0)

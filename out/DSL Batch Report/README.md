@@ -1,17 +1,18 @@
 
 **Script Name**: DSL Batch Report  
 **Author**: Brandon Johnson  
-**Date**: 2025-08-21  
-**Version**: 1.1.0  
+**Date**: 2026-07-24  
+**Version**: 1.2.1  
 
 **Description**:   
 Automates preperation of DSL CWR batch validation report.
 
 **Features**:   
-- Inserts columns and headers for Pref Code, AKAs, ISRCs, Setup Note, Assigned To, IPI, and PRO
+- Inserts columns and headers for Pref Code, ISWC, AKAs, ISRCs, Setup Note, Assigned To, and PRO
+- Trims the existing IPI column
 - Cleans/trims song titles
-- Performs lookups against "ISRCs for upload", "AKA Table", and "IP Table"
-- Generates Setup Notes based on AD/AE columns
+- Performs lookups against "ISWC Table", "ISRC Table", "AKA Table", and "IP Table"
+- Generates Setup Notes based on AE/AF columns
 - Applies conditional formatting to highlight non-empty cells
 - Formats headers with wrap, bold, underline, and fill color
 - Formats additional sheets as tables and adds filter buttons
@@ -20,7 +21,8 @@ Automates preperation of DSL CWR batch validation report.
 **Notes**:   
 - Column layout in main sheet matches the expected pre-insert positions
  **- The following sheets exist in the workbook**:   
-     "ISRCs for upload" (lookup column )
+     "ISWC Table"      (lookup key column B, ISWC in C)
+     "ISRC Table"      (lookup column )
      "AKA Table"        (lookup column A)
-     "IP Table"         (lookup key column A, IPI in D, PRO in E)
+     "IP Table"         (lookup key column A, PRO in E)
 - Column indexes in this script are 0-based for Office Scripts API

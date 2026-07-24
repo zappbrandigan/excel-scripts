@@ -8,11 +8,12 @@
 Automates preperation of DSL CWR batch validation report.
 
 **Features**:   
-- Inserts columns and headers for Pref Code, ISWC, AKAs, ISRCs, Setup Note, Assigned To, and PRO
+- Inserts columns and headers for Pref Code, AKAs, ISRCs, Setup Note, Assigned To, and PRO
+- Adds and populates ISWC only when an "ISWC Table" sheet exists
 - Trims the existing IPI column
 - Cleans/trims song titles
-- Performs lookups against "ISWC Table", "ISRC Table", "AKA Table", and "IP Table"
-- Generates Setup Notes based on AE/AF columns
+- Performs lookups against "ISRC Table", "AKA Table", "IP Table", and optional "ISWC Table"
+- Generates Setup Notes from the shifted source rule columns
 - Applies conditional formatting to highlight non-empty cells
 - Formats headers with wrap, bold, underline, and fill color
 - Formats additional sheets as tables and adds filter buttons
@@ -21,7 +22,7 @@ Automates preperation of DSL CWR batch validation report.
 **Notes**:   
 - Column layout in main sheet matches the expected pre-insert positions
  **- The following sheets exist in the workbook**:   
-     "ISWC Table"      (lookup key column B, ISWC in C)
+     "ISWC Table"      (optional; lookup key column B, ISWC in C)
      "ISRC Table"      (lookup column )
      "AKA Table"        (lookup column A)
      "IP Table"         (lookup key column A, PRO in E)

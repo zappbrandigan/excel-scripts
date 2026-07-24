@@ -11,11 +11,12 @@
  * Automates preperation of DSL CWR batch validation report.
  *
  * Features:
- * - Inserts columns and headers for Pref Code, ISWC, AKAs, ISRCs, Setup Note, Assigned To, and PRO
+ * - Inserts columns and headers for Pref Code, AKAs, ISRCs, Setup Note, Assigned To, and PRO
+ * - Adds and populates ISWC only when an "ISWC Table" sheet exists
  * - Trims the existing IPI column
  * - Cleans/trims song titles
- * - Performs lookups against "ISWC Table", "ISRC Table", "AKA Table", and "IP Table"
- * - Generates Setup Notes based on AE/AF columns
+ * - Performs lookups against "ISRC Table", "AKA Table", "IP Table", and optional "ISWC Table"
+ * - Generates Setup Notes from the shifted source rule columns
  * - Applies conditional formatting to highlight non-empty cells
  * - Formats headers with wrap, bold, underline, and fill color
  * - Formats additional sheets as tables and adds filter buttons
@@ -24,7 +25,7 @@
  * Notes:
  * - Column layout in main sheet matches the expected pre-insert positions
  *  - The following sheets exist in the workbook:
- *      "ISWC Table"      (lookup key column B, ISWC in C)
+ *      "ISWC Table"      (optional; lookup key column B, ISWC in C)
  *      "ISRC Table"      (lookup column )
  *      "AKA Table"        (lookup column A)
  *      "IP Table"         (lookup key column A, PRO in E)
@@ -35,19 +36,16 @@ function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
 
   // -- Config ----------------------------------------------------------------
-  const headersBetweenBC = [
-    'PREF Code',
-    'ISWC',
-    'AKAs',
-    'ISRCs',
-    'Setup Note',
-  ]; // C..G after insert
+  const lookupIswcSheetName = 'ISWC Table';
+  const hasIswcTable = workbook.getWorksheet(lookupIswcSheetName) !== undefined;
+  const headersBetweenBC = hasIswcTable
+    ? ['PREF Code', 'ISWC', 'AKAs', 'ISRCs', 'Setup Note']
+    : ['PREF Code', 'AKAs', 'ISRCs', 'Setup Note'];
   const headersBeforeA = ['Assigned To']; // A after insert
-  const proHeader = ['PRO']; // X after insert
+  const proHeader = ['PRO'];
   const headerFillColor = '#3bc1ff';
 
   const lookupIsrcSheetName = 'ISRC Table';
-  const lookupIswcSheetName = 'ISWC Table';
   const lookupAkaSheetName = 'AKA Table';
   const ipTableSheetName = 'IP Table';
   const lookupIsrcColumn = 'B';
@@ -56,6 +54,15 @@ function main(workbook: ExcelScript.Workbook) {
   const lookupAkaColumn = 'A';
   const ipKeyCol = 'A'; // IP Table lookup
   const ipProCol = 'E'; // PRO to return
+
+  const iswcColumnIndex = hasIswcTable ? 4 : -1; // E when present
+  const akaColumnIndex = hasIswcTable ? 5 : 4; // F or E
+  const isrcColumnIndex = hasIswcTable ? 6 : 5; // G or F
+  const setupNoteColumnIndex = hasIswcTable ? 7 : 6; // H or G
+  const ipLookupColumnIndex = hasIswcTable ? 20 : 19; // U or T
+  const proColumnIndex = hasIswcTable ? 24 : 23; // Y or X
+  const setupRuleColumn1Index = hasIswcTable ? 30 : 29; // AE or AD
+  const setupRuleColumn2Index = hasIswcTable ? 31 : 30; // AF or AE
 
   const setupNotes = {
     pop: 'Pop work (unlinked OG/016, check PM1 and US2 for existing work)',
@@ -188,9 +195,18 @@ function main(workbook: ExcelScript.Workbook) {
   // Delete column G
   sheet.getRange('G:G').delete(ExcelScript.DeleteShiftDirection.left);
 
-  // Insert five columns between B and C (-> C..G)
-  sheet.getRange('C:G').insert(ExcelScript.InsertShiftDirection.right);
-  const hdrBetweenBC = sheet.getRangeByIndexes(0, 2, 1, 5);
+  // Insert report columns between B and C.
+  const insertedColumnCount = headersBetweenBC.length;
+  const insertedEndColumn = hasIswcTable ? 'G' : 'F';
+  sheet
+    .getRange(`C:${insertedEndColumn}`)
+    .insert(ExcelScript.InsertShiftDirection.right);
+  const hdrBetweenBC = sheet.getRangeByIndexes(
+    0,
+    2,
+    1,
+    insertedColumnCount
+  );
   hdrBetweenBC.setValues([headersBetweenBC]);
   styleHeader(hdrBetweenBC, { fill: headerFillColor });
 
@@ -200,9 +216,12 @@ function main(workbook: ExcelScript.Workbook) {
   hdrBeforeA.setValues([headersBeforeA]);
   styleHeader(hdrBeforeA, { fill: headerFillColor });
 
-  // The original IPI column S is now X. Insert PRO immediately after it at Y.
-  sheet.getRange('Y:Y').insert(ExcelScript.InsertShiftDirection.right);
-  const hdrPro = sheet.getRange('Y1:Y1');
+  // Insert PRO immediately after the shifted existing IPI column.
+  const proColumnLetter = hasIswcTable ? 'Y' : 'X';
+  sheet
+    .getRange(`${proColumnLetter}:${proColumnLetter}`)
+    .insert(ExcelScript.InsertShiftDirection.right);
+  const hdrPro = sheet.getRange(`${proColumnLetter}1:${proColumnLetter}1`);
   hdrPro.setValues([proHeader]);
   styleHeader(hdrPro, { fill: headerFillColor });
 
@@ -221,11 +240,13 @@ function main(workbook: ExcelScript.Workbook) {
   // -- Lookups (case-insensitive) -------------------------------------------
   const isrcSet = getLookupSet(lookupIsrcSheetName, lookupIsrcColumn);
   const akaSet = getLookupSet(lookupAkaSheetName, lookupAkaColumn);
-  const iswcMap = getLookupMap(
-    lookupIswcSheetName,
-    lookupIswcKeyColumn,
-    lookupIswcValueColumn
-  );
+  const iswcMap = hasIswcTable
+    ? getLookupMap(
+        lookupIswcSheetName,
+        lookupIswcKeyColumn,
+        lookupIswcValueColumn
+      )
+    : new Map<string, string>();
 
   // Data rows only (skip header)
   const dataRowCount = Math.max(0, lastRow - 1);
@@ -233,10 +254,9 @@ function main(workbook: ExcelScript.Workbook) {
 
   const colB_data = sheet.getRangeByIndexes(1, 1, dataRowCount, 1).getValues();
 
-  // ISWC values in E; flags in F (AKA) and G (ISRC)
-  const outE: string[][] = new Array(dataRowCount);
-  const outF: string[][] = new Array(dataRowCount);
-  const outG: string[][] = new Array(dataRowCount);
+  const outIswc: string[][] = new Array(dataRowCount);
+  const outAka: string[][] = new Array(dataRowCount);
+  const outIsrc: string[][] = new Array(dataRowCount);
 
   for (let i = 0; i < dataRowCount; i++) {
     const raw = colB_data[i][0];
@@ -246,19 +266,42 @@ function main(workbook: ExcelScript.Workbook) {
         : typeof raw === 'string'
         ? raw.trim().toLowerCase()
         : String(raw);
-    outE[i] = [key ? iswcMap.get(key) ?? '' : ''];
-    outF[i] = [key && akaSet.has(key) ? 'see AKA table' : ''];
-    outG[i] = [key && isrcSet.has(key) ? 'ISRCS Table' : ''];
+    outIswc[i] = [key ? iswcMap.get(key) ?? '' : ''];
+    outAka[i] = [key && akaSet.has(key) ? 'see AKA table' : ''];
+    outIsrc[i] = [key && isrcSet.has(key) ? 'ISRCS Table' : ''];
   }
 
-  sheet.getRangeByIndexes(1, 4, dataRowCount, 1).setValues(outE); // E
-  sheet.getRangeByIndexes(1, 5, dataRowCount, 1).setValues(outF); // F
-  sheet.getRangeByIndexes(1, 6, dataRowCount, 1).setValues(outG); // G
+  if (hasIswcTable) {
+    sheet
+      .getRangeByIndexes(1, iswcColumnIndex, dataRowCount, 1)
+      .setValues(outIswc);
+  }
+  sheet
+    .getRangeByIndexes(1, akaColumnIndex, dataRowCount, 1)
+    .setValues(outAka);
+  sheet
+    .getRangeByIndexes(1, isrcColumnIndex, dataRowCount, 1)
+    .setValues(outIsrc);
 
-  // -- Setup Notes (H), based on AE/AF -----------------------------------------
-  const adRange = sheet.getRangeByIndexes(1, 30, dataRowCount, 1); // AE
-  const aeRange = sheet.getRangeByIndexes(1, 31, dataRowCount, 1); // AF
-  const setupNoteRange = sheet.getRangeByIndexes(1, 7, dataRowCount, 1); // H
+  // -- Setup Notes, based on the two shifted source rule columns --------------
+  const adRange = sheet.getRangeByIndexes(
+    1,
+    setupRuleColumn1Index,
+    dataRowCount,
+    1
+  );
+  const aeRange = sheet.getRangeByIndexes(
+    1,
+    setupRuleColumn2Index,
+    dataRowCount,
+    1
+  );
+  const setupNoteRange = sheet.getRangeByIndexes(
+    1,
+    setupNoteColumnIndex,
+    dataRowCount,
+    1
+  );
 
   const adVals = adRange.getValues();
   const aeVals = aeRange.getValues();
@@ -304,31 +347,43 @@ function main(workbook: ExcelScript.Workbook) {
 
   setupNoteRange.setValues(setupNotesOutput);
 
-  // -- PRO (Y) via IP Table keyed by IP (U) -----------------------------------
+  // -- PRO via IP Table keyed by the shifted IP column ------------------------
   const ipRows = getIpMap(ipTableSheetName, ipKeyCol, ipProCol);
-  const outY: string[][] = Array.from({ length: dataRowCount }, () => ['']); // PRO (Y=24)
+  const outPro: string[][] = Array.from({ length: dataRowCount }, () => ['']);
 
-  const colU_data = sheet.getRangeByIndexes(1, 20, dataRowCount, 1).getValues();
+  const ipLookupValues = sheet
+    .getRangeByIndexes(1, ipLookupColumnIndex, dataRowCount, 1)
+    .getValues();
 
   for (let i = 0; i < dataRowCount; i++) {
-    const raw = colU_data[i][0];
+    const raw = ipLookupValues[i][0];
     const searchKey = raw == null ? '' : String(raw).trim().toLowerCase();
     if (!searchKey) continue;
 
     // Find first IP Table row whose key contains the search key
     const found = ipRows.find((row) => row.key.includes(searchKey));
     if (found) {
-      outY[i][0] = found.pro;
+      outPro[i][0] = found.pro;
     }
   }
 
-  sheet.getRangeByIndexes(1, 24, dataRowCount, 1).setValues(outY); // Y
+  sheet
+    .getRangeByIndexes(1, proColumnIndex, dataRowCount, 1)
+    .setValues(outPro);
 
-  // -- Conditional fills for non-empty cells (E, F, G, X, Y)------------------
-  applyNonEmptyFill(sheet, 4, 1, dataRowCount, headerFillColor); // E (ISWC)
-  applyNonEmptyFill(sheet, 5, 1, dataRowCount, headerFillColor); // F (AKA)
-  applyNonEmptyFill(sheet, 6, 1, dataRowCount, headerFillColor); // G (ISRC)
-  applyNonEmptyFill(sheet, 24, 1, dataRowCount, headerFillColor); // Y (PRO)
+  // -- Conditional fills for non-empty lookup/result cells -------------------
+  if (hasIswcTable) {
+    applyNonEmptyFill(
+      sheet,
+      iswcColumnIndex,
+      1,
+      dataRowCount,
+      headerFillColor
+    );
+  }
+  applyNonEmptyFill(sheet, akaColumnIndex, 1, dataRowCount, headerFillColor);
+  applyNonEmptyFill(sheet, isrcColumnIndex, 1, dataRowCount, headerFillColor);
+  applyNonEmptyFill(sheet, proColumnIndex, 1, dataRowCount, headerFillColor);
 
   // -- Header row wrapping & auto-fit ---------------------------------------
   const usedCols = (
@@ -339,12 +394,19 @@ function main(workbook: ExcelScript.Workbook) {
 
   // -- Format lookup sheets as tables ---------------------------------------
   formatSheetAsTable(workbook, 'AKA Table', 'AKATable');
-  formatSheetAsTable(workbook, 'ISWC Table', 'ISWCTable');
+  if (hasIswcTable) {
+    formatSheetAsTable(workbook, lookupIswcSheetName, 'ISWCTable');
+  }
   formatSheetAsTable(workbook, 'ISRC Table', 'ISRCLookup');
   formatSheetAsTable(workbook, 'IP Table', 'IPTable');
 
-  // -- Build the "Setup" sheet from A, B, C, Setup Note (H), and I ------------
-  buildSetupSheet(workbook, sheet);
+  // -- Build the "Setup" sheet from A, B, C, Setup Note, and the next column ---
+  buildSetupSheet(
+    workbook,
+    sheet,
+    setupNoteColumnIndex,
+    setupNoteColumnIndex + 1
+  );
 
   // -- Freeze top row of active sheet
   sheet.getFreezePanes().freezeRows(1);
@@ -625,18 +687,21 @@ function dedupeBySongAndSeq(ws: ExcelScript.Worksheet): void {
 
 /**
  * Create/replace a "Setup" sheet from a source sheet:
- * - Columns copied: A, B, C, H (Setup Note), I
+ * - Columns copied: A, B, C, the generated Setup Note, and the following column
  * - De-duplicates rows by column A (of the new sheet), keeping the first occurrence
  * - Styles header and auto-fits columns
  *
  * @param wb              Target workbook
  * @param source          Source worksheet (main/active sheet)
- * @param headerFillColor Header fill color for styling (e.g., "#3bc1ff")
+ * @param setupNoteColumnIndex Zero-based Setup Note column on the source
+ * @param followingColumnIndex Zero-based source column following Setup Note
  * @returns               The created "Setup" worksheet
  */
 function buildSetupSheet(
   wb: ExcelScript.Workbook,
-  source: ExcelScript.Worksheet
+  source: ExcelScript.Worksheet,
+  setupNoteColumnIndex: number,
+  followingColumnIndex: number
 ): ExcelScript.Worksheet {
   const name = 'Setup';
 
@@ -650,27 +715,42 @@ function buildSetupSheet(
   const lastRow = used ? used.getRowCount() : 0;
   const dataRowCount = Math.max(0, lastRow - 1);
 
-  // Read source headers (row 1) for A, B, C, H, I
+  // Read source headers for A, B, C, Setup Note, and its following column.
   const hdrA = source.getRangeByIndexes(0, 0, 1, 1).getValues()[0][0];
   const hdrB = source.getRangeByIndexes(0, 1, 1, 1).getValues()[0][0];
   const hdrC = source.getRangeByIndexes(0, 2, 1, 1).getValues()[0][0];
-  const hdrH = source.getRangeByIndexes(0, 7, 1, 1).getValues()[0][0];
-  const hdrI = source.getRangeByIndexes(0, 8, 1, 1).getValues()[0][0];
+  const hdrSetupNote = source
+    .getRangeByIndexes(0, setupNoteColumnIndex, 1, 1)
+    .getValues()[0][0];
+  const hdrFollowing = source
+    .getRangeByIndexes(0, followingColumnIndex, 1, 1)
+    .getValues()[0][0];
 
-  // Write target headers: A, B, C, Setup Note, I
-  ws.getRangeByIndexes(0, 0, 1, 5).setValues([[hdrA, hdrB, hdrC, hdrH, hdrI]]);
+  ws.getRangeByIndexes(0, 0, 1, 5).setValues([
+    [hdrA, hdrB, hdrC, hdrSetupNote, hdrFollowing],
+  ]);
 
   if (dataRowCount > 0) {
-    // Read source data rows for A, B, C, H, I
+    // Read source data rows for the selected columns.
     const colA = source.getRangeByIndexes(1, 0, dataRowCount, 1).getValues();
     const colB = source.getRangeByIndexes(1, 1, dataRowCount, 1).getValues();
     const colC = source.getRangeByIndexes(1, 2, dataRowCount, 1).getValues();
-    const colH = source.getRangeByIndexes(1, 7, dataRowCount, 1).getValues();
-    const colI = source.getRangeByIndexes(1, 8, dataRowCount, 1).getValues();
+    const colSetupNote = source
+      .getRangeByIndexes(1, setupNoteColumnIndex, dataRowCount, 1)
+      .getValues();
+    const colFollowing = source
+      .getRangeByIndexes(1, followingColumnIndex, dataRowCount, 1)
+      .getValues();
 
     const out: (string | number | boolean)[][] = new Array(dataRowCount);
     for (let i = 0; i < dataRowCount; i++) {
-      out[i] = [colA[i][0], colB[i][0], colC[i][0], colH[i][0], colI[i][0]];
+      out[i] = [
+        colA[i][0],
+        colB[i][0],
+        colC[i][0],
+        colSetupNote[i][0],
+        colFollowing[i][0],
+      ];
     }
     ws.getRangeByIndexes(1, 0, dataRowCount, 5).setValues(out);
 
